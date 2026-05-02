@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python mock_erp/seed.py)",
+      "Bash(python discovery/introspect.py)",
+      "Bash(python -m discovery.semantic_map)",
+      "Bash(python -c ' *)",
+      "Bash(python -m learner.miner)",
+      "Bash(python -c \"import rich\")",
+      "Bash(python agent/demo.py)",
+      "Bash(PYTHONIOENCODING=utf-8 python agent/demo.py)",
+      "Bash(PYTHONIOENCODING=utf-8 python run.py inspect)",
+      "Bash(PYTHONIOENCODING=utf-8 python run.py)",
+      "Bash(PYTHONIOENCODING=utf-8 PYTHONUNBUFFERED=1 python -u run.py)",
+      "Bash(tasklist //FI \"IMAGENAME eq python.exe\")",
+      "Bash(tasklist //FI \"IMAGENAME eq pythonw.exe\")",
+      "Bash(tasklist //FI \"WINDOWTITLE eq mcp*\")"
+    ]
+  }
+}

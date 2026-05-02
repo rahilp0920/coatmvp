@@ -1,0 +1,1886 @@
+{
+  "database": "C:\\Users\\s_cha\\OneDrive\\Documents\\MVP\\erp_adapter\\data\\erp.db",
+  "tables": {
+    "MAT_MASTER": {
+      "columns": [
+        {
+          "name": "MATNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 9,
+            "distinct": 9,
+            "examples": [
+              "SKU-100",
+              "SKU-101",
+              "SKU-200",
+              "SKU-201",
+              "SKU-300"
+            ]
+          }
+        },
+        {
+          "name": "MAKTX",
+          "type": "TEXT",
+          "notnull": true,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 9,
+            "distinct": 9,
+            "examples": [
+              "Industrial Bearing 6204-2RS",
+              "Steel Shaft 25mm x 500mm",
+              "Glass Display Panel 24in",
+              "Ceramic Capacitor Reel 1uF",
+              "Lithium Cell 18650 3.7V"
+            ]
+          }
+        },
+        {
+          "name": "MTART",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 9,
+            "distinct": 4,
+            "examples": [
+              "HAWA",
+              "HALB",
+              "ROH",
+              "FERT"
+            ]
+          }
+        },
+        {
+          "name": "MEINS",
+          "type": "TEXT",
+          "notnull": false,
+          "default": "'EA'",
+          "pk": false,
+          "stats": {
+            "rows": 9,
+            "distinct": 2,
+            "examples": [
+              "EA",
+              "DR"
+            ]
+          }
+        },
+        {
+          "name": "NTGEW",
+          "type": "REAL",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 9,
+            "distinct": 9,
+            "examples": [
+              0.1,
+              2.5,
+              4.2,
+              0.05,
+              0.04
+            ]
+          }
+        },
+        {
+          "name": "Z_FRAGILE",
+          "type": "INTEGER",
+          "notnull": false,
+          "default": "0",
+          "pk": false,
+          "stats": {
+            "rows": 9,
+            "distinct": 2,
+            "examples": [
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "name": "Z_HAZMAT",
+          "type": "INTEGER",
+          "notnull": false,
+          "default": "0",
+          "pk": false,
+          "stats": {
+            "rows": 9,
+            "distinct": 2,
+            "examples": [
+              0,
+              1
+            ]
+          }
+        },
+        {
+          "name": "ERSDA",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 9,
+            "distinct": 1,
+            "examples": [
+              "2025-05-01T00:00:00"
+            ]
+          }
+        },
+        {
+          "name": "ERNAM",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 9,
+            "distinct": 1,
+            "examples": [
+              "system"
+            ]
+          }
+        }
+      ],
+      "samples": [
+        {
+          "MATNR": "SKU-400",
+          "MAKTX": "Packaging Box L",
+          "MTART": "HAWA",
+          "MEINS": "EA",
+          "NTGEW": 0.3,
+          "Z_FRAGILE": 0,
+          "Z_HAZMAT": 0,
+          "ERSDA": "2025-05-01T00:00:00",
+          "ERNAM": "system"
+        },
+        {
+          "MATNR": "SKU-301",
+          "MAKTX": "Solvent Drum 200L",
+          "MTART": "ROH",
+          "MEINS": "DR",
+          "NTGEW": 220.0,
+          "Z_FRAGILE": 0,
+          "Z_HAZMAT": 1,
+          "ERSDA": "2025-05-01T00:00:00",
+          "ERNAM": "system"
+        },
+        {
+          "MATNR": "SKU-441",
+          "MAKTX": "Printed Circuit Board Rev-C",
+          "MTART": "HALB",
+          "MEINS": "EA",
+          "NTGEW": 0.08,
+          "Z_FRAGILE": 1,
+          "Z_HAZMAT": 0,
+          "ERSDA": "2025-05-01T00:00:00",
+          "ERNAM": "system"
+        },
+        {
+          "MATNR": "SKU-500",
+          "MAKTX": "Finished Assembly Model X",
+          "MTART": "FERT",
+          "MEINS": "EA",
+          "NTGEW": 3.1,
+          "Z_FRAGILE": 1,
+          "Z_HAZMAT": 0,
+          "ERSDA": "2025-05-01T00:00:00",
+          "ERNAM": "system"
+        },
+        {
+          "MATNR": "SKU-201",
+          "MAKTX": "Ceramic Capacitor Reel 1uF",
+          "MTART": "ROH",
+          "MEINS": "EA",
+          "NTGEW": 0.05,
+          "Z_FRAGILE": 1,
+          "Z_HAZMAT": 0,
+          "ERSDA": "2025-05-01T00:00:00",
+          "ERNAM": "system"
+        }
+      ],
+      "row_count": 9
+    },
+    "LFA1": {
+      "columns": [
+        {
+          "name": "LIFNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 5,
+            "distinct": 5,
+            "examples": [
+              "V1001",
+              "V1002",
+              "V1003",
+              "V1004",
+              "V1005"
+            ]
+          }
+        },
+        {
+          "name": "NAME1",
+          "type": "TEXT",
+          "notnull": true,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 5,
+            "distinct": 5,
+            "examples": [
+              "Acme Components Inc.",
+              "Globex Industrial",
+              "Initech Supply",
+              "Hooli Materials Ltd",
+              "Soylent Logistics"
+            ]
+          }
+        },
+        {
+          "name": "LAND1",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 5,
+            "distinct": 2,
+            "examples": [
+              "US",
+              "GB"
+            ]
+          }
+        },
+        {
+          "name": "Z_RATING",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 5,
+            "distinct": 3,
+            "examples": [
+              "A",
+              "B",
+              "C"
+            ]
+          }
+        },
+        {
+          "name": "SPERR",
+          "type": "INTEGER",
+          "notnull": false,
+          "default": "0",
+          "pk": false,
+          "stats": {
+            "rows": 5,
+            "distinct": 2,
+            "examples": [
+              0,
+              1
+            ]
+          }
+        }
+      ],
+      "samples": [
+        {
+          "LIFNR": "V1005",
+          "NAME1": "Soylent Logistics",
+          "LAND1": "US",
+          "Z_RATING": "B",
+          "SPERR": 1
+        },
+        {
+          "LIFNR": "V1004",
+          "NAME1": "Hooli Materials Ltd",
+          "LAND1": "GB",
+          "Z_RATING": "C",
+          "SPERR": 0
+        },
+        {
+          "LIFNR": "V1002",
+          "NAME1": "Globex Industrial",
+          "LAND1": "US",
+          "Z_RATING": "B",
+          "SPERR": 0
+        },
+        {
+          "LIFNR": "V1001",
+          "NAME1": "Acme Components Inc.",
+          "LAND1": "US",
+          "Z_RATING": "A",
+          "SPERR": 0
+        },
+        {
+          "LIFNR": "V1003",
+          "NAME1": "Initech Supply",
+          "LAND1": "US",
+          "Z_RATING": "A",
+          "SPERR": 0
+        }
+      ],
+      "row_count": 5
+    },
+    "T001W": {
+      "columns": [
+        {
+          "name": "WERKS",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 3,
+            "distinct": 3,
+            "examples": [
+              "WH01",
+              "WH02",
+              "WH03"
+            ]
+          }
+        },
+        {
+          "name": "NAME1",
+          "type": "TEXT",
+          "notnull": true,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 3,
+            "distinct": 3,
+            "examples": [
+              "Newark Distribution Center",
+              "Reno Fulfillment",
+              "Rotterdam Hub"
+            ]
+          }
+        },
+        {
+          "name": "LAND1",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 3,
+            "distinct": 2,
+            "examples": [
+              "US",
+              "NL"
+            ]
+          }
+        },
+        {
+          "name": "Z_REGION",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 3,
+            "distinct": 3,
+            "examples": [
+              "EAST",
+              "WEST",
+              "EU"
+            ]
+          }
+        }
+      ],
+      "samples": [
+        {
+          "WERKS": "WH03",
+          "NAME1": "Rotterdam Hub",
+          "LAND1": "NL",
+          "Z_REGION": "EU"
+        },
+        {
+          "WERKS": "WH02",
+          "NAME1": "Reno Fulfillment",
+          "LAND1": "US",
+          "Z_REGION": "WEST"
+        },
+        {
+          "WERKS": "WH01",
+          "NAME1": "Newark Distribution Center",
+          "LAND1": "US",
+          "Z_REGION": "EAST"
+        }
+      ],
+      "row_count": 3
+    },
+    "WH_STOCK": {
+      "columns": [
+        {
+          "name": "MATNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 25,
+            "distinct": 9,
+            "examples": [
+              "SKU-100",
+              "SKU-101",
+              "SKU-200",
+              "SKU-201",
+              "SKU-300"
+            ]
+          }
+        },
+        {
+          "name": "WERKS",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 25,
+            "distinct": 3,
+            "examples": [
+              "WH01",
+              "WH02",
+              "WH03"
+            ]
+          }
+        },
+        {
+          "name": "LABST",
+          "type": "REAL",
+          "notnull": false,
+          "default": "0",
+          "pk": false,
+          "stats": {
+            "rows": 25,
+            "distinct": 24,
+            "examples": [
+              942.0,
+              661.0,
+              656.0,
+              810.0,
+              1113.0
+            ]
+          }
+        },
+        {
+          "name": "INSME",
+          "type": "REAL",
+          "notnull": false,
+          "default": "0",
+          "pk": false,
+          "stats": {
+            "rows": 25,
+            "distinct": 19,
+            "examples": [
+              7.0,
+              23.0,
+              32.0,
+              35.0,
+              4.0
+            ]
+          }
+        },
+        {
+          "name": "RETME",
+          "type": "REAL",
+          "notnull": false,
+          "default": "0",
+          "pk": false,
+          "stats": {
+            "rows": 25,
+            "distinct": 18,
+            "examples": [
+              2.0,
+              8.0,
+              9.0,
+              3.0,
+              17.0
+            ]
+          }
+        }
+      ],
+      "samples": [
+        {
+          "MATNR": "SKU-300",
+          "WERKS": "WH02",
+          "LABST": 844.0,
+          "INSME": 26.0,
+          "RETME": 2.0
+        },
+        {
+          "MATNR": "SKU-441",
+          "WERKS": "WH02",
+          "LABST": 1031.0,
+          "INSME": 23.0,
+          "RETME": 16.0
+        },
+        {
+          "MATNR": "SKU-500",
+          "WERKS": "WH02",
+          "LABST": 500.0,
+          "INSME": 12.0,
+          "RETME": 4.0
+        },
+        {
+          "MATNR": "SKU-301",
+          "WERKS": "WH01",
+          "LABST": 638.0,
+          "INSME": 11.0,
+          "RETME": 6.0
+        },
+        {
+          "MATNR": "SKU-300",
+          "WERKS": "WH01",
+          "LABST": 707.0,
+          "INSME": 29.0,
+          "RETME": 13.0
+        }
+      ],
+      "row_count": 25
+    },
+    "BIN_DETAIL": {
+      "columns": [
+        {
+          "name": "MATNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 98,
+            "distinct": 9,
+            "examples": [
+              "SKU-100",
+              "SKU-101",
+              "SKU-200",
+              "SKU-201",
+              "SKU-300"
+            ]
+          }
+        },
+        {
+          "name": "WERKS",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 98,
+            "distinct": 3,
+            "examples": [
+              "WH01",
+              "WH02",
+              "WH03"
+            ]
+          }
+        },
+        {
+          "name": "LGORT",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 98,
+            "distinct": 2,
+            "examples": [
+              "AUX",
+              "MAIN"
+            ]
+          }
+        },
+        {
+          "name": "BIN_CODE",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 98,
+            "distinct": 87,
+            "examples": [
+              "A02-9-1",
+              "A05-2-4",
+              "A05-7-2",
+              "M02-4-2",
+              "A03-2-1"
+            ]
+          }
+        },
+        {
+          "name": "QTY",
+          "type": "REAL",
+          "notnull": false,
+          "default": "0",
+          "pk": false,
+          "stats": {
+            "rows": 98,
+            "distinct": 78,
+            "examples": [
+              302.0,
+              301.0,
+              56.0,
+              292.0,
+              308.0
+            ]
+          }
+        },
+        {
+          "name": "Z_STATUS",
+          "type": "TEXT",
+          "notnull": false,
+          "default": "'OK'",
+          "pk": false,
+          "stats": {
+            "rows": 98,
+            "distinct": 3,
+            "examples": [
+              "OK",
+              "BLK",
+              "QI"
+            ]
+          }
+        }
+      ],
+      "samples": [
+        {
+          "MATNR": "SKU-200",
+          "WERKS": "WH01",
+          "LGORT": "AUX",
+          "BIN_CODE": "A02-8-2",
+          "QTY": 311.0,
+          "Z_STATUS": "OK"
+        },
+        {
+          "MATNR": "SKU-101",
+          "WERKS": "WH01",
+          "LGORT": "MAIN",
+          "BIN_CODE": "M05-4-3",
+          "QTY": 164.0,
+          "Z_STATUS": "OK"
+        },
+        {
+          "MATNR": "SKU-101",
+          "WERKS": "WH03",
+          "LGORT": "MAIN",
+          "BIN_CODE": "M05-5-3",
+          "QTY": 64.0,
+          "Z_STATUS": "OK"
+        },
+        {
+          "MATNR": "SKU-100",
+          "WERKS": "WH02",
+          "LGORT": "AUX",
+          "BIN_CODE": "A03-2-1",
+          "QTY": 384.0,
+          "Z_STATUS": "OK"
+        },
+        {
+          "MATNR": "SKU-100",
+          "WERKS": "WH01",
+          "LGORT": "AUX",
+          "BIN_CODE": "A05-2-4",
+          "QTY": 301.0,
+          "Z_STATUS": "OK"
+        }
+      ],
+      "row_count": 98
+    },
+    "Z_RESERVED": {
+      "columns": [
+        {
+          "name": "RES_ID",
+          "type": "INTEGER",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 4,
+            "distinct": 4,
+            "examples": [
+              1,
+              2,
+              3,
+              4
+            ]
+          }
+        },
+        {
+          "name": "MATNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 4,
+            "distinct": 3,
+            "examples": [
+              "SKU-441",
+              "SKU-500",
+              "SKU-200"
+            ]
+          }
+        },
+        {
+          "name": "WERKS",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 4,
+            "distinct": 2,
+            "examples": [
+              "WH01",
+              "WH02"
+            ]
+          }
+        },
+        {
+          "name": "QTY",
+          "type": "REAL",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 4,
+            "distinct": 4,
+            "examples": [
+              50.0,
+              100.0,
+              30.0,
+              20.0
+            ]
+          }
+        },
+        {
+          "name": "REF_DOC",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 4,
+            "distinct": 4,
+            "examples": [
+              "SO-2025-1188",
+              "SO-2025-1190",
+              "SO-2025-1195",
+              "SO-2025-1170"
+            ]
+          }
+        },
+        {
+          "name": "CREATED_AT",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 4,
+            "distinct": 4,
+            "examples": [
+              "2026-04-28T00:00:00",
+              "2026-04-30T00:00:00",
+              "2026-05-01T00:00:00",
+              "2026-04-24T00:00:00"
+            ]
+          }
+        },
+        {
+          "name": "EXPIRES_AT",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 4,
+            "distinct": 4,
+            "examples": [
+              "2026-05-08T00:00:00",
+              "2026-05-15T00:00:00",
+              "2026-05-06T00:00:00",
+              "2026-05-01T00:00:00"
+            ]
+          }
+        }
+      ],
+      "samples": [
+        {
+          "RES_ID": 4,
+          "MATNR": "SKU-200",
+          "WERKS": "WH01",
+          "QTY": 20.0,
+          "REF_DOC": "SO-2025-1170",
+          "CREATED_AT": "2026-04-24T00:00:00",
+          "EXPIRES_AT": "2026-05-01T00:00:00"
+        },
+        {
+          "RES_ID": 1,
+          "MATNR": "SKU-441",
+          "WERKS": "WH01",
+          "QTY": 50.0,
+          "REF_DOC": "SO-2025-1188",
+          "CREATED_AT": "2026-04-28T00:00:00",
+          "EXPIRES_AT": "2026-05-08T00:00:00"
+        },
+        {
+          "RES_ID": 3,
+          "MATNR": "SKU-500",
+          "WERKS": "WH02",
+          "QTY": 30.0,
+          "REF_DOC": "SO-2025-1195",
+          "CREATED_AT": "2026-05-01T00:00:00",
+          "EXPIRES_AT": "2026-05-06T00:00:00"
+        },
+        {
+          "RES_ID": 2,
+          "MATNR": "SKU-441",
+          "WERKS": "WH02",
+          "QTY": 100.0,
+          "REF_DOC": "SO-2025-1190",
+          "CREATED_AT": "2026-04-30T00:00:00",
+          "EXPIRES_AT": "2026-05-15T00:00:00"
+        }
+      ],
+      "row_count": 4
+    },
+    "AP_HEAD": {
+      "columns": [
+        {
+          "name": "BELNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 7,
+            "distinct": 7,
+            "examples": [
+              "INV-90001",
+              "INV-90002",
+              "INV-90003",
+              "INV-90004",
+              "INV-90005"
+            ]
+          }
+        },
+        {
+          "name": "BUKRS",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 7,
+            "distinct": 1,
+            "examples": [
+              "1000"
+            ]
+          }
+        },
+        {
+          "name": "LIFNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 7,
+            "distinct": 4,
+            "examples": [
+              "V1001",
+              "V1002",
+              "V1003",
+              "V1004"
+            ]
+          }
+        },
+        {
+          "name": "BLDAT",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 7,
+            "distinct": 7,
+            "examples": [
+              "2026-03-17T00:00:00",
+              "2026-03-22T00:00:00",
+              "2026-04-01T00:00:00",
+              "2026-04-11T00:00:00",
+              "2026-04-16T00:00:00"
+            ]
+          }
+        },
+        {
+          "name": "WAERS",
+          "type": "TEXT",
+          "notnull": false,
+          "default": "'USD'",
+          "pk": false,
+          "stats": {
+            "rows": 7,
+            "distinct": 2,
+            "examples": [
+              "USD",
+              "GBP"
+            ]
+          }
+        },
+        {
+          "name": "WRBTR",
+          "type": "REAL",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 7,
+            "distinct": 7,
+            "examples": [
+              850.0,
+              4200.0,
+              620.0,
+              12500.0,
+              1800.0
+            ]
+          }
+        },
+        {
+          "name": "STATUS",
+          "type": "TEXT",
+          "notnull": false,
+          "default": "'PARK'",
+          "pk": false,
+          "stats": {
+            "rows": 7,
+            "distinct": 1,
+            "examples": [
+              "POST"
+            ]
+          }
+        },
+        {
+          "name": "APPROVER",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 7,
+            "distinct": 2,
+            "examples": [
+              "u_mgr_c",
+              "u_cfo"
+            ]
+          }
+        },
+        {
+          "name": "APPROVED_AT",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 7,
+            "distinct": 7,
+            "examples": [
+              "2026-03-18T00:00:00",
+              "2026-03-23T00:00:00",
+              "2026-04-01T00:00:00",
+              "2026-04-13T00:00:00",
+              "2026-04-17T00:00:00"
+            ]
+          }
+        },
+        {
+          "name": "CREATED_BY",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 7,
+            "distinct": 2,
+            "examples": [
+              "u_clerk_a",
+              "u_clerk_b"
+            ]
+          }
+        },
+        {
+          "name": "CREATED_AT",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 7,
+            "distinct": 7,
+            "examples": [
+              "2026-03-17T00:00:00",
+              "2026-03-22T00:00:00",
+              "2026-04-01T00:00:00",
+              "2026-04-11T00:00:00",
+              "2026-04-16T00:00:00"
+            ]
+          }
+        }
+      ],
+      "samples": [
+        {
+          "BELNR": "INV-90007",
+          "BUKRS": "1000",
+          "LIFNR": "V1001",
+          "BLDAT": "2026-04-26T00:00:00",
+          "WAERS": "USD",
+          "WRBTR": 2100.0,
+          "STATUS": "POST",
+          "APPROVER": "u_mgr_c",
+          "APPROVED_AT": "2026-04-26T00:00:00",
+          "CREATED_BY": "u_clerk_a",
+          "CREATED_AT": "2026-04-26T00:00:00"
+        },
+        {
+          "BELNR": "INV-90003",
+          "BUKRS": "1000",
+          "LIFNR": "V1001",
+          "BLDAT": "2026-04-01T00:00:00",
+          "WAERS": "USD",
+          "WRBTR": 620.0,
+          "STATUS": "POST",
+          "APPROVER": "u_mgr_c",
+          "APPROVED_AT": "2026-04-01T00:00:00",
+          "CREATED_BY": "u_clerk_b",
+          "CREATED_AT": "2026-04-01T00:00:00"
+        },
+        {
+          "BELNR": "INV-90001",
+          "BUKRS": "1000",
+          "LIFNR": "V1001",
+          "BLDAT": "2026-03-17T00:00:00",
+          "WAERS": "USD",
+          "WRBTR": 850.0,
+          "STATUS": "POST",
+          "APPROVER": "u_mgr_c",
+          "APPROVED_AT": "2026-03-18T00:00:00",
+          "CREATED_BY": "u_clerk_a",
+          "CREATED_AT": "2026-03-17T00:00:00"
+        },
+        {
+          "BELNR": "INV-90006",
+          "BUKRS": "1000",
+          "LIFNR": "V1004",
+          "BLDAT": "2026-04-21T00:00:00",
+          "WAERS": "GBP",
+          "WRBTR": 3300.0,
+          "STATUS": "POST",
+          "APPROVER": "u_mgr_c",
+          "APPROVED_AT": "2026-04-22T00:00:00",
+          "CREATED_BY": "u_clerk_a",
+          "CREATED_AT": "2026-04-21T00:00:00"
+        },
+        {
+          "BELNR": "INV-90004",
+          "BUKRS": "1000",
+          "LIFNR": "V1003",
+          "BLDAT": "2026-04-11T00:00:00",
+          "WAERS": "USD",
+          "WRBTR": 12500.0,
+          "STATUS": "POST",
+          "APPROVER": "u_cfo",
+          "APPROVED_AT": "2026-04-13T00:00:00",
+          "CREATED_BY": "u_clerk_a",
+          "CREATED_AT": "2026-04-11T00:00:00"
+        }
+      ],
+      "row_count": 7
+    },
+    "AP_LINES": {
+      "columns": [
+        {
+          "name": "BELNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 0,
+            "distinct": 0,
+            "examples": []
+          }
+        },
+        {
+          "name": "POSNR",
+          "type": "INTEGER",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 0,
+            "distinct": 0,
+            "examples": []
+          }
+        },
+        {
+          "name": "MATNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 0,
+            "distinct": 0,
+            "examples": []
+          }
+        },
+        {
+          "name": "WERKS",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 0,
+            "distinct": 0,
+            "examples": []
+          }
+        },
+        {
+          "name": "MENGE",
+          "type": "REAL",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 0,
+            "distinct": 0,
+            "examples": []
+          }
+        },
+        {
+          "name": "NETPR",
+          "type": "REAL",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 0,
+            "distinct": 0,
+            "examples": []
+          }
+        },
+        {
+          "name": "NETWR",
+          "type": "REAL",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 0,
+            "distinct": 0,
+            "examples": []
+          }
+        }
+      ],
+      "samples": [],
+      "row_count": 0
+    },
+    "GL_ENTRIES": {
+      "columns": [
+        {
+          "name": "GL_ID",
+          "type": "INTEGER",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 14,
+            "distinct": 14,
+            "examples": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          }
+        },
+        {
+          "name": "BELNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 14,
+            "distinct": 7,
+            "examples": [
+              "INV-90001",
+              "INV-90002",
+              "INV-90003",
+              "INV-90004",
+              "INV-90005"
+            ]
+          }
+        },
+        {
+          "name": "HKONT",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 14,
+            "distinct": 2,
+            "examples": [
+              "510000",
+              "211000"
+            ]
+          }
+        },
+        {
+          "name": "BUKRS",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 14,
+            "distinct": 1,
+            "examples": [
+              "1000"
+            ]
+          }
+        },
+        {
+          "name": "DMBTR",
+          "type": "REAL",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 14,
+            "distinct": 7,
+            "examples": [
+              850.0,
+              4200.0,
+              620.0,
+              12500.0,
+              1800.0
+            ]
+          }
+        },
+        {
+          "name": "SHKZG",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 14,
+            "distinct": 2,
+            "examples": [
+              "S",
+              "H"
+            ]
+          }
+        },
+        {
+          "name": "BLDAT",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 14,
+            "distinct": 7,
+            "examples": [
+              "2026-03-17T00:00:00",
+              "2026-03-22T00:00:00",
+              "2026-04-01T00:00:00",
+              "2026-04-11T00:00:00",
+              "2026-04-16T00:00:00"
+            ]
+          }
+        },
+        {
+          "name": "POSTED_AT",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 14,
+            "distinct": 7,
+            "examples": [
+              "2026-03-18T00:00:00",
+              "2026-03-23T00:00:00",
+              "2026-04-01T00:00:00",
+              "2026-04-13T00:00:00",
+              "2026-04-17T00:00:00"
+            ]
+          }
+        }
+      ],
+      "samples": [
+        {
+          "GL_ID": 12,
+          "BELNR": "INV-90006",
+          "HKONT": "211000",
+          "BUKRS": "1000",
+          "DMBTR": 3300.0,
+          "SHKZG": "H",
+          "BLDAT": "2026-04-21T00:00:00",
+          "POSTED_AT": "2026-04-22T00:00:00"
+        },
+        {
+          "GL_ID": 4,
+          "BELNR": "INV-90002",
+          "HKONT": "211000",
+          "BUKRS": "1000",
+          "DMBTR": 4200.0,
+          "SHKZG": "H",
+          "BLDAT": "2026-03-22T00:00:00",
+          "POSTED_AT": "2026-03-23T00:00:00"
+        },
+        {
+          "GL_ID": 14,
+          "BELNR": "INV-90007",
+          "HKONT": "211000",
+          "BUKRS": "1000",
+          "DMBTR": 2100.0,
+          "SHKZG": "H",
+          "BLDAT": "2026-04-26T00:00:00",
+          "POSTED_AT": "2026-04-26T00:00:00"
+        },
+        {
+          "GL_ID": 11,
+          "BELNR": "INV-90006",
+          "HKONT": "510000",
+          "BUKRS": "1000",
+          "DMBTR": 3300.0,
+          "SHKZG": "S",
+          "BLDAT": "2026-04-21T00:00:00",
+          "POSTED_AT": "2026-04-22T00:00:00"
+        },
+        {
+          "GL_ID": 6,
+          "BELNR": "INV-90003",
+          "HKONT": "211000",
+          "BUKRS": "1000",
+          "DMBTR": 620.0,
+          "SHKZG": "H",
+          "BLDAT": "2026-04-01T00:00:00",
+          "POSTED_AT": "2026-04-01T00:00:00"
+        }
+      ],
+      "row_count": 14
+    },
+    "MSEG": {
+      "columns": [
+        {
+          "name": "MBLNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 60,
+            "distinct": 60,
+            "examples": [
+              "DOC70001",
+              "DOC70002",
+              "DOC70003",
+              "DOC70004",
+              "DOC70005"
+            ]
+          }
+        },
+        {
+          "name": "ZEILE",
+          "type": "INTEGER",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 60,
+            "distinct": 1,
+            "examples": [
+              1
+            ]
+          }
+        },
+        {
+          "name": "BWART",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 60,
+            "distinct": 1,
+            "examples": [
+              "311"
+            ]
+          }
+        },
+        {
+          "name": "MATNR",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 60,
+            "distinct": 7,
+            "examples": [
+              "SKU-300",
+              "SKU-400",
+              "SKU-441",
+              "SKU-500",
+              "SKU-101"
+            ]
+          }
+        },
+        {
+          "name": "WERKS_FROM",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 60,
+            "distinct": 2,
+            "examples": [
+              "WH01",
+              "WH02"
+            ]
+          }
+        },
+        {
+          "name": "WERKS_TO",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 60,
+            "distinct": 3,
+            "examples": [
+              "WH03",
+              "WH02",
+              "WH01"
+            ]
+          }
+        },
+        {
+          "name": "LGORT_FROM",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 60,
+            "distinct": 1,
+            "examples": [
+              "MAIN"
+            ]
+          }
+        },
+        {
+          "name": "LGORT_TO",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 60,
+            "distinct": 1,
+            "examples": [
+              "MAIN"
+            ]
+          }
+        },
+        {
+          "name": "MENGE",
+          "type": "REAL",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 60,
+            "distinct": 44,
+            "examples": [
+              41.0,
+              42.0,
+              66.0,
+              60.0,
+              37.0
+            ]
+          }
+        },
+        {
+          "name": "POSTED_BY",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 60,
+            "distinct": 2,
+            "examples": [
+              "u_clerk_a",
+              "u_clerk_b"
+            ]
+          }
+        },
+        {
+          "name": "POSTED_AT",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 60,
+            "distinct": 30,
+            "examples": [
+              "2026-03-02T00:00:00",
+              "2026-03-04T00:00:00",
+              "2026-03-06T00:00:00",
+              "2026-03-08T00:00:00",
+              "2026-03-10T00:00:00"
+            ]
+          }
+        }
+      ],
+      "samples": [
+        {
+          "MBLNR": "DOC70008",
+          "ZEILE": 1,
+          "BWART": "311",
+          "MATNR": "SKU-200",
+          "WERKS_FROM": "WH02",
+          "WERKS_TO": "WH01",
+          "LGORT_FROM": "MAIN",
+          "LGORT_TO": "MAIN",
+          "MENGE": 78.0,
+          "POSTED_BY": "u_clerk_b",
+          "POSTED_AT": "2026-03-08T00:00:00"
+        },
+        {
+          "MBLNR": "DOC70011",
+          "ZEILE": 1,
+          "BWART": "311",
+          "MATNR": "SKU-100",
+          "WERKS_FROM": "WH01",
+          "WERKS_TO": "WH03",
+          "LGORT_FROM": "MAIN",
+          "LGORT_TO": "MAIN",
+          "MENGE": 39.0,
+          "POSTED_BY": "u_clerk_b",
+          "POSTED_AT": "2026-03-12T00:00:00"
+        },
+        {
+          "MBLNR": "DOC70037",
+          "ZEILE": 1,
+          "BWART": "311",
+          "MATNR": "SKU-500",
+          "WERKS_FROM": "WH02",
+          "WERKS_TO": "WH01",
+          "LGORT_FROM": "MAIN",
+          "LGORT_TO": "MAIN",
+          "MENGE": 54.0,
+          "POSTED_BY": "u_clerk_a",
+          "POSTED_AT": "2026-04-07T00:00:00"
+        },
+        {
+          "MBLNR": "DOC70003",
+          "ZEILE": 1,
+          "BWART": "311",
+          "MATNR": "SKU-441",
+          "WERKS_FROM": "WH02",
+          "WERKS_TO": "WH03",
+          "LGORT_FROM": "MAIN",
+          "LGORT_TO": "MAIN",
+          "MENGE": 66.0,
+          "POSTED_BY": "u_clerk_b",
+          "POSTED_AT": "2026-03-04T00:00:00"
+        },
+        {
+          "MBLNR": "DOC70016",
+          "ZEILE": 1,
+          "BWART": "311",
+          "MATNR": "SKU-441",
+          "WERKS_FROM": "WH02",
+          "WERKS_TO": "WH01",
+          "LGORT_FROM": "MAIN",
+          "LGORT_TO": "MAIN",
+          "MENGE": 79.0,
+          "POSTED_BY": "u_clerk_b",
+          "POSTED_AT": "2026-03-16T00:00:00"
+        }
+      ],
+      "row_count": 60
+    },
+    "Z_APPR_RULES": {
+      "columns": [
+        {
+          "name": "RULE_ID",
+          "type": "INTEGER",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 5,
+            "distinct": 5,
+            "examples": [
+              1,
+              2,
+              3,
+              4,
+              5
+            ]
+          }
+        },
+        {
+          "name": "DOC_TYPE",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 5,
+            "distinct": 2,
+            "examples": [
+              "AP_INVOICE",
+              "TRANSFER"
+            ]
+          }
+        },
+        {
+          "name": "MIN_AMT",
+          "type": "REAL",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 5,
+            "distinct": 4,
+            "examples": [
+              0.0,
+              1000.0,
+              10000.0,
+              5000.0
+            ]
+          }
+        },
+        {
+          "name": "MAX_AMT",
+          "type": "REAL",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 5,
+            "distinct": 4,
+            "examples": [
+              1000.0,
+              10000.0,
+              1000000000.0,
+              5000.0
+            ]
+          }
+        },
+        {
+          "name": "APPROVER_ROLE",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 5,
+            "distinct": 3,
+            "examples": [
+              "AUTO",
+              "MANAGER",
+              "CFO"
+            ]
+          }
+        },
+        {
+          "name": "ACTIVE",
+          "type": "INTEGER",
+          "notnull": false,
+          "default": "1",
+          "pk": false,
+          "stats": {
+            "rows": 5,
+            "distinct": 1,
+            "examples": [
+              1
+            ]
+          }
+        }
+      ],
+      "samples": [
+        {
+          "RULE_ID": 1,
+          "DOC_TYPE": "AP_INVOICE",
+          "MIN_AMT": 0.0,
+          "MAX_AMT": 1000.0,
+          "APPROVER_ROLE": "AUTO",
+          "ACTIVE": 1
+        },
+        {
+          "RULE_ID": 5,
+          "DOC_TYPE": "TRANSFER",
+          "MIN_AMT": 5000.0,
+          "MAX_AMT": 1000000000.0,
+          "APPROVER_ROLE": "MANAGER",
+          "ACTIVE": 1
+        },
+        {
+          "RULE_ID": 3,
+          "DOC_TYPE": "AP_INVOICE",
+          "MIN_AMT": 10000.0,
+          "MAX_AMT": 1000000000.0,
+          "APPROVER_ROLE": "CFO",
+          "ACTIVE": 1
+        },
+        {
+          "RULE_ID": 4,
+          "DOC_TYPE": "TRANSFER",
+          "MIN_AMT": 0.0,
+          "MAX_AMT": 5000.0,
+          "APPROVER_ROLE": "AUTO",
+          "ACTIVE": 1
+        },
+        {
+          "RULE_ID": 2,
+          "DOC_TYPE": "AP_INVOICE",
+          "MIN_AMT": 1000.0,
+          "MAX_AMT": 10000.0,
+          "APPROVER_ROLE": "MANAGER",
+          "ACTIVE": 1
+        }
+      ],
+      "row_count": 5
+    },
+    "USERS": {
+      "columns": [
+        {
+          "name": "USER_ID",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": true,
+          "stats": {
+            "rows": 4,
+            "distinct": 4,
+            "examples": [
+              "u_cfo",
+              "u_clerk_a",
+              "u_clerk_b",
+              "u_mgr_c"
+            ]
+          }
+        },
+        {
+          "name": "USER_NAME",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 4,
+            "distinct": 4,
+            "examples": [
+              "Alice Chen",
+              "Bob Diaz",
+              "Carol Singh",
+              "Dana Park"
+            ]
+          }
+        },
+        {
+          "name": "ROLE",
+          "type": "TEXT",
+          "notnull": false,
+          "default": null,
+          "pk": false,
+          "stats": {
+            "rows": 4,
+            "distinct": 3,
+            "examples": [
+              "CLERK",
+              "MANAGER",
+              "CFO"
+            ]
+          }
+        }
+      ],
+      "samples": [
+        {
+          "USER_ID": "u_cfo",
+          "USER_NAME": "Dana Park",
+          "ROLE": "CFO"
+        },
+        {
+          "USER_ID": "u_clerk_a",
+          "USER_NAME": "Alice Chen",
+          "ROLE": "CLERK"
+        },
+        {
+          "USER_ID": "u_mgr_c",
+          "USER_NAME": "Carol Singh",
+          "ROLE": "MANAGER"
+        },
+        {
+          "USER_ID": "u_clerk_b",
+          "USER_NAME": "Bob Diaz",
+          "ROLE": "CLERK"
+        }
+      ],
+      "row_count": 4
+    }
+  },
+  "fk_edges": [
+    {
+      "from_table": "WH_STOCK",
+      "from": "WERKS",
+      "to_table": "T001W",
+      "to_col": "WERKS"
+    },
+    {
+      "from_table": "WH_STOCK",
+      "from": "MATNR",
+      "to_table": "MAT_MASTER",
+      "to_col": "MATNR"
+    },
+    {
+      "from_table": "AP_HEAD",
+      "from": "LIFNR",
+      "to_table": "LFA1",
+      "to_col": "LIFNR"
+    },
+    {
+      "from_table": "AP_LINES",
+      "from": "BELNR",
+      "to_table": "AP_HEAD",
+      "to_col": "BELNR"
+    }
+  ]
+}
