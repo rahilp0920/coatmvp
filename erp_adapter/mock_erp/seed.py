@@ -229,12 +229,100 @@ def seed_history(c: sqlite3.Cursor) -> None:
     )
 
 
+def apply_demo_overrides(c: sqlite3.Cursor) -> None:
+    """Surgical adjustments after random seeding so the inventory bundle
+    surfaces a visible spread of risk bands.
+
+    Without these overrides every item shows LOW risk because seeded
+    velocity is light relative to seeded stock — that's accurate but
+    boring on screen. The overrides set up:
+
+      • SKU-441 (PCB, fragile, hero of scene 5) — HIGH risk:
+        WH02 drained to 100, WH01 drained to 30, 60 recent outbound
+        transfers from WH02 over the last 21 days driving daily demand
+        into the same range as available stock. Combined with the
+        Suzhou shipping-news signal, the recommendation is concrete:
+        reorder ~50 units.
+
+      • SKU-200 (display panel, fragile) — MEDIUM risk:
+        WH02 drained to 50, 30 recent outbound transfers over 21 days.
+        Just barely above projected demand — the kind of marginal call
+        a real planner makes every week.
+
+      • SKU-300 (lithium cells, hazmat) — LOW risk left as-is.
+
+    All overrides write through BIN_DETAIL + WH_STOCK + MSEG so the
+    bundle assembler reads them naturally — no special-case code in
+    the assembler.
+    """
+    # ---- SKU-441: drain stock everywhere + boost recent outbound ----
+    c.execute("DELETE FROM Z_RESERVED WHERE MATNR='SKU-441'")
+    c.execute("DELETE FROM BIN_DETAIL WHERE MATNR='SKU-441'")
+    c.execute("DELETE FROM WH_STOCK   WHERE MATNR='SKU-441'")
+    # Re-seed only the warehouses we want visible, with the values we want.
+    for werks, qty in [("WH01", 30), ("WH02", 100), ("WH03", 0)]:
+        c.execute(
+            "INSERT INTO WH_STOCK (MATNR,WERKS,LABST,INSME,RETME) VALUES (?,?,?,0,0)",
+            ("SKU-441", werks, qty),
+        )
+        if qty > 0:
+            c.execute(
+                "INSERT INTO BIN_DETAIL (MATNR,WERKS,LGORT,BIN_CODE,QTY,Z_STATUS) "
+                "VALUES (?,?,?,?,?,'OK')",
+                ("SKU-441", werks, "MAIN", "M01-1-1", qty),
+            )
+
+    mblnr_seq = 80000
+    for day in range(-21, 0):
+        # 3 transfers per day on average — push out_avg/day high enough
+        for _ in range(3):
+            mblnr_seq += 1
+            qty = round(random.uniform(12, 22))
+            c.execute(
+                "INSERT INTO MSEG (MBLNR,ZEILE,BWART,MATNR,WERKS_FROM,WERKS_TO,"
+                "LGORT_FROM,LGORT_TO,MENGE,POSTED_BY,POSTED_AT) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (f"DOC{mblnr_seq}", 1, "311", "SKU-441",
+                 "WH02", "WH01", "MAIN", "MAIN",
+                 qty, "u_clerk_a", now_iso(day)),
+            )
+
+    # ---- SKU-200: drain everywhere to ~50, add steady recent outbound ----
+    c.execute("DELETE FROM Z_RESERVED WHERE MATNR='SKU-200'")
+    c.execute("DELETE FROM BIN_DETAIL WHERE MATNR='SKU-200'")
+    c.execute("DELETE FROM WH_STOCK   WHERE MATNR='SKU-200'")
+    for werks, qty in [("WH01", 20), ("WH02", 50), ("WH03", 0)]:
+        c.execute(
+            "INSERT INTO WH_STOCK (MATNR,WERKS,LABST,INSME,RETME) VALUES (?,?,?,0,0)",
+            ("SKU-200", werks, qty),
+        )
+        if qty > 0:
+            c.execute(
+                "INSERT INTO BIN_DETAIL (MATNR,WERKS,LGORT,BIN_CODE,QTY,Z_STATUS) "
+                "VALUES (?,?,?,?,?,'OK')",
+                ("SKU-200", werks, "MAIN", "M01-1-1", qty),
+            )
+    for day in range(-21, 0):
+        if random.random() < 0.65:
+            mblnr_seq += 1
+            qty = round(random.uniform(8, 14))
+            c.execute(
+                "INSERT INTO MSEG (MBLNR,ZEILE,BWART,MATNR,WERKS_FROM,WERKS_TO,"
+                "LGORT_FROM,LGORT_TO,MENGE,POSTED_BY,POSTED_AT) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (f"DOC{mblnr_seq}", 1, "311", "SKU-200",
+                 "WH02", "WH01", "MAIN", "MAIN",
+                 qty, "u_clerk_b", now_iso(day)),
+            )
+
+
 def main() -> None:
     conn = reset_db()
     c = conn.cursor()
     seed_masters(c)
     seed_stock(c)
     seed_history(c)
+    apply_demo_overrides(c)
     conn.commit()
 
     # Seed Coat-registered external sources (weather, shipping news, ...).
