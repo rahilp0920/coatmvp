@@ -206,3 +206,43 @@ CREATE TABLE EXTERNAL_SIGNALS (
 );
 CREATE INDEX idx_extsig_lookup ON EXTERNAL_SIGNALS(ENTITY_KIND, ENTITY_KEY, SOURCE);
 CREATE INDEX idx_extsig_freshness ON EXTERNAL_SIGNALS(EXPIRES_AT);
+
+-- =========================================================================
+-- AGENTS (registered external agents that plug into Coat over MCP)
+-- =========================================================================
+-- Onboarding via `coat agent onboard` derives a manifest from a plain-English
+-- description (admin describes the job; Coat infers scopes + bundles).
+-- The manifest is the contract — granted_scopes, denied_scopes, allowed
+-- bundles, mode (trial / enforced / revoked), trial budget. Tool dispatch
+-- consults this row before every call.
+CREATE TABLE AGENTS (
+    AGENT_ID         TEXT PRIMARY KEY,
+    DESCRIPTION      TEXT NOT NULL,
+    PROVIDER         TEXT,                  -- anthropic / openai / google / null
+    MODEL            TEXT,                  -- e.g. 'o3', 'claude-opus-4-6'
+    MANIFEST_JSON    TEXT NOT NULL,         -- granted/denied scopes + bundles
+    STATUS           TEXT DEFAULT 'trial',  -- trial / enforced / revoked
+    TRIAL_CALLS_USED INTEGER DEFAULT 0,
+    TRIAL_CALLS_MAX  INTEGER DEFAULT 50,
+    TRIAL_EXPIRES_AT TEXT,
+    REGISTERED_AT    TEXT,
+    REGISTERED_BY    TEXT,
+    AUDIT_ID         TEXT
+);
+CREATE INDEX idx_agents_status ON AGENTS(STATUS);
+
+-- Capability grant audit — every scope granted to an agent gets a row
+-- here, traceable back to the originating manifest or pattern ratification.
+CREATE TABLE CAPABILITY_GRANTS (
+    GRANT_ID         INTEGER PRIMARY KEY AUTOINCREMENT,
+    AGENT_ID         TEXT NOT NULL,
+    SCOPE            TEXT NOT NULL,
+    ORIGIN           TEXT NOT NULL,         -- 'manifest' / 'ratification:<pattern_id>' / 'admin'
+    GRANTED_AT       TEXT NOT NULL,
+    GRANTED_BY       TEXT,                  -- user_id of ratifier
+    REVOKED_AT       TEXT,
+    NOTE             TEXT,
+    FOREIGN KEY (AGENT_ID) REFERENCES AGENTS(AGENT_ID)
+);
+CREATE INDEX idx_capgrants_agent ON CAPABILITY_GRANTS(AGENT_ID);
+CREATE INDEX idx_capgrants_active ON CAPABILITY_GRANTS(AGENT_ID, SCOPE, REVOKED_AT);
