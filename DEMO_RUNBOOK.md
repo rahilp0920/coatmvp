@@ -13,14 +13,23 @@ loaded. Split-pane: editor left, terminal right.
 
 ## Philosophy on screen
 
-**As easy as wearing a coat.** The admin never types a scope string.
-They describe the agent's job in plain English. Coat infers what the
-agent needs to read, write, and act on — and surfaces a proposal for
-human ratification. Permissions are *derived*, not declared. Agents
-don't ask for capabilities — Coat figures out what they need and the
-human signs off.
+**As easy as wearing a coat.** Two ideas the recording has to land:
 
-This is what the recording has to feel like, scene by scene.
+*Permissions are derived, not declared.* The admin describes the
+agent's job in plain English. Coat infers what the agent needs to
+read, write, and act on — and surfaces a proposal for human
+ratification. Agents don't ask for capabilities; Coat figures out
+what they need and the human signs off.
+
+*Context is delivered, not assembled.* The agent does not fetch
+from Coat, then fetch from a weather API, then join them in code.
+**Coat is the context layer.** External signals — weather, supply
+chain news, sanctions lists, market data — are registered with
+Coat. The agent calls one tool, gets a fully-assembled,
+business-shaped context bundle, and spends its tokens on
+*reasoning*, not on plumbing. That's what makes a third-party
+agent feel like it has a senior analyst handing it briefings —
+because it does, and the analyst is Coat.
 
 ---
 
@@ -156,11 +165,11 @@ you'd describe it to a new hire."*
 
 The admin types:
 
-> *"Atlas — an inventory planning specialist. It looks at our stock,
-> recent movements, and outside data like weather and shipping
-> disruptions to predict next week's stockout risk per SKU and
-> recommend reorder quantities. It needs to read inventory and
-> movements; it doesn't post anything to the ERP itself."*
+> *"Atlas — an inventory planning specialist. It needs to understand
+> our current stock, movement velocity, learned routing patterns,
+> and outside demand signals — weather, supply-chain news, anything
+> that shapes near-term demand. It produces stockout risk and
+> reorder recommendations. It doesn't post anything to the ERP."*
 
 Coat thinks for a beat, then surfaces the proposal:
 
@@ -168,24 +177,28 @@ Coat thinks for a beat, then surfaces the proposal:
 PROPOSED AGENT — atlas@coat.io/v1                            (provider: o3 / Gemini 2.5)
 
 Description
-  Specialized inventory-planning agent. Reads stock + movement history;
-  joins external context; outputs reorder recommendations. Does not
-  write to the ERP.
+  Specialized inventory-planning agent. Reasons over an inventory
+  context bundle Coat assembles. Outputs reorder recommendations.
+  Does not write to the ERP.
 
 Inferred scopes (least privilege)
-  ✓ coat:concepts:read         — needs to know the shape of this ERP
-  ✓ coat:inventory:read        — get_stock, suggest_source_warehouse (read-only)
-  ✓ coat:patterns:read         — surface routing patterns to inform recommendations
-  ✗ coat:inventory:write       — NOT granted (description says "doesn't post anything")
-  ✗ coat:invoice:*             — NOT granted (out of role)
+  ✓ coat:concepts:read           — knows the shape of this ERP
+  ✓ coat:context:inventory:read  — receives Coat-assembled inventory bundle
+  ✓ coat:patterns:read           — sees learned routing patterns explicitly
+  ✗ coat:inventory:write         — NOT granted (description says "doesn't post anything")
+  ✗ coat:invoice:*               — NOT granted (out of role)
+
+Inventory context bundle this agent will receive on each call
+  • current stock by warehouse + bin (from ERP)
+  • last 60d of movements (from change boundary)
+  • learned routing + reservation patterns (from learner)
+  • external demand signals — weather, supply-chain news
+        these external sources are registered with Coat at the tenant level;
+        Atlas does NOT fetch them. Coat does. Atlas reasons.
 
 Mode
   trial (advisory only) for first 50 calls or 7 days, whichever comes first
   promotion to enforced requires re-ratification
-
-External data sources the agent declared it will use
-  • weather/precipitation data (Open-Meteo)
-  • shipping-disruption news (RSS, hashed for audit)
 
   [r]atify   [e]dit scopes   [c]ancel
 ```
@@ -199,29 +212,32 @@ key, opens a trial session, and prints:
   next ratification due:  after 50th call OR Friday May 10
 ```
 
-**Voice:** *"This is the onboarding. The admin doesn't think about
-permissions. They describe the agent like they'd describe a new
-hire. Coat reads the description, infers what the agent needs to
-read, write, and act on — and proposes the smallest scope set that
-covers it. The human signs off. The agent is live in trial mode.
-That's the whole onboarding. As easy as wearing a coat."*
+**Voice:** *"This is the onboarding. The admin describes the agent
+like they'd brief a new hire. Coat infers the smallest scope set
+that covers the job and tells the admin which scopes were
+**not** granted, with reasons. The human signs off. The agent is
+live in trial mode. Notice what's not happening: nobody told Coat
+'go fetch weather, here's an API key.' The external sources are
+already registered with Coat at the tenant level. Atlas doesn't
+fetch. Atlas reasons over what Coat hands it. As easy as
+wearing a coat."*
 
 **Infrastructure required:**
 - `coat agent onboard` CLI: prompts for description, asks Claude to
-  parse it into a manifest (description → tasks → required tools →
-  scope set), renders the proposal with explicit "granted" and
-  "denied" lines, persists on ratify. *To build — ~140 lines.*
-- Manifest derivation logic on the adapter side: a small function
-  that takes a description + Coat's tool catalog and returns the
-  minimal scope set. Uses Claude with a tight system prompt; falls
-  back to a curated keyword-to-scope mapping if offline. *To build —
-  ~80 lines.*
-- "Trial mode" in the existing capability lifecycle from
-  `OBSERVABILITY.md` — already specified, just needs the budget +
-  expiry plumbing. *To build — ~40 lines.*
-- Agent registry table — single `AGENTS` table with id, manifest,
-  pubkey_path (placeholder ok for the demo), trial_budget, next_review.
+  parse it into a manifest (description → tasks → required scopes
+  → required context bundles), renders the proposal with explicit
+  "granted" and "denied" lines, persists on ratify. *To build —
+  ~140 lines.*
+- Manifest derivation logic: takes a description + Coat's tool /
+  bundle catalog and returns the minimal scope and bundle set.
+  Claude-powered with a curated keyword fallback for offline. *To
+  build — ~80 lines.*
+- "Trial mode" budget + expiry plumbing. *To build — ~40 lines.*
+- `AGENTS` table — id, manifest, trial_budget, next_review.
   *To build — schema + 30 lines.*
+- `config/connections/external/*.yaml` — per-tenant external source
+  registry (weather provider, news feed, sanctions list, etc.).
+  *To build — schema + ~60 lines.*
 
 ---
 
@@ -233,30 +249,62 @@ either works). The admin types:
 > *"Atlas, what's our stockout risk for next week, and what should
 > we reorder?"*
 
-Atlas thinks. Tool calls stream in real time — `list_concepts`,
-`get_stock` for the top SKUs, `suggest_source_warehouse` for routing
-context, `list_patterns(kind=ROUTING)` for learned constraints. Each
-call shows the granted scope it ran under. Then the answer:
+Atlas makes **one** tool call: `get_inventory_context(window=7d)`.
+Coat receives it, assembles the bundle from every relevant source
+it owns, and returns it in business shape:
+
+```json
+{
+  "as_of": "2026-05-03T14:14:32Z",
+  "window": "7d",
+  "items": [
+    {
+      "sku": "SKU-441",
+      "name": "Printed Circuit Board Rev-C",
+      "on_hand_by_warehouse": { "WH01": 180, "WH02": 320, "WH03": 0 },
+      "available_after_reservations": { "WH01": 130, "WH02": 220, "WH03": 0 },
+      "movement_last_60d": { "out_avg_per_day": 28.4, "trend": "rising" },
+      "learned_routing": "fragile_source=WH02 (conf 0.84)",
+      "external_signals": {
+        "weather_demand_modifier": 1.18,
+        "weather_summary": "heat dome forecast 5/9-5/12, HVAC demand up",
+        "supply_chain_risk": "low",
+        "news_summary": null
+      }
+    },
+    { "sku": "SKU-200", "...": "..." },
+    { "sku": "SKU-300", "...": "..." }
+  ],
+  "context_origin": [
+    "ERP: WH_STOCK + BIN_DETAIL + Z_RESERVED",
+    "Change boundary: MSEG, last 60d",
+    "Learner: ROUTING patterns (3 enforced)",
+    "External: Open-Meteo (registered tenant-level), RSS shipping (registered)"
+  ]
+}
+```
+
+That single response is everything Atlas needs. No second call. No
+weather API. No RSS parser. **The agent reasons over context Coat
+delivered.** Atlas produces:
 
 ```
-INVENTORY OUTLOOK — week of 2026-05-10  (Atlas, trial mode, 7/50 calls)
+INVENTORY OUTLOOK — week of 2026-05-10  (Atlas, trial 7/50)
 
-SKU       wh    on_hand  proj_demand    stockout_risk    reorder_qty   confidence
-SKU-441   WH01   180     ~210±18        HIGH             ≥30 by Fri    0.84
-SKU-200   WH02    95     ~110±14        MEDIUM           ≥20 by Mon    0.71
-SKU-300   WH02   240     ~180±22        LOW              none          0.79
+SKU       wh    avail   proj_demand    stockout_risk    reorder_qty   confidence
+SKU-441   WH01   130     ~210±18        HIGH             ≥30 by Fri    0.84
+SKU-200   WH02   ...     ~110±14        MEDIUM           ≥20 by Mon    0.71
+SKU-300   WH02   ...     ~180±22        LOW              none          0.79
 
-Reasoning notes:
-  • SKU-441 trending up due to seasonal HVAC demand (Open-Meteo: heat dome 5/9–5/12)
-  • SKU-200 affected by upstream shipping delay (RSS: Port of Long Beach 5/3 advisory)
-  • SKU-300 stable; consistent with last 3 quarters
-
-Recommended action: place reorder for SKU-441 (30 units) and SKU-200 (20 units).
+Reasoning:
+  • SKU-441 demand uplift from heat-dome forecast (weather_demand_modifier 1.18)
+  • Routing pattern says fragile sources from WH02 — keep ≥220 there
+  • SKU-300 stable; consistent with movement trend
 ```
 
 The admin replies:
 
-> *"Go ahead and stage the reorder PO for SKU-441."*
+> *"Stage the reorder PO for SKU-441."*
 
 Atlas tries to call `create_purchase_order`. Coat returns:
 
@@ -275,26 +323,36 @@ The admin presses `y`. Coat updates the manifest, the trial budget
 expands by one scope, the call retries, the PO is staged. Audit
 trail captures the whole arc.
 
-**Voice:** *"Atlas runs under the scopes Coat inferred. Read-only,
-trial mode. Real reasoning, real external data, real ERP context —
-things the incumbents' AI can't see because it's filtered by their
-access controls. When Atlas hits the edge of its granted scope, it
-doesn't fail silently. Coat surfaces the gap to the admin in
-plain English: 'Atlas is asking for this capability. Want to grant
-it?' Mid-flight ratification. Audit chain captures the entire arc —
-who asked for what, when, why, and what they got back. SOC 2,
-GDPR, SOX-aware from day one. Full compliance roadmap in
-COMPLIANCE.md."*
+**Voice:** *"Atlas runs under the scopes Coat inferred. Atlas is
+**reasoning**, not plumbing. The agent made one tool call and got
+back current stock, recent movements, learned patterns, AND
+external demand signals — all assembled by Coat into a single
+business-shaped bundle. The incumbents' AI can't see the external
+signals because their AI is filtered by their access controls.
+External agents in the wild can't see the ERP context because
+they don't have the rails. Coat is the layer where both
+sides meet. Then — when Atlas tries to write something it wasn't
+authorized for, Coat surfaces the gap inline. Mid-flight
+ratification. One human keystroke. Audited end to end."*
 
 **Infrastructure required:**
 - Atlas as a configured agent backed by a non-Claude reasoning model
-  (e.g., `openai/o3` or `google/gemini-2.5-pro` via their respective
-  SDKs) — demonstrates Coat is provider-agnostic. *To build — ~180
+  (e.g., `openai/o3` or `google/gemini-2.5-pro`). *To build — ~180
   lines: client wrapper + system prompt + tool-call loop.*
-- Synthetic external data: `data/external/weather.csv` and
-  `data/external/shipping_disruptions.csv`. *To build — trivial.*
+- `get_inventory_context(window, scope?)` MCP tool on the adapter:
+  reads ERP stock + bins + reservations, joins recent MSEG
+  movements, joins enforced ROUTING patterns, joins external
+  signals from registered sources, returns a single bundle.
+  *To build — ~150 lines (most of the joins exist; this is
+  composition).*
+- External-source registry + adapter: `external_sources/` directory
+  with one module per source type (`weather.py`, `news_rss.py`).
+  Each emits records into a `EXTERNAL_SIGNALS` table keyed by
+  entity (SKU, vendor, region). The context-bundle assembler reads
+  from this table by key, not by going to the source live.
+  *To build — ~200 lines + 2 small CSV fixtures.*
 - `cap.denied` path on tool dispatch + "scope expansion request"
-  surface that posts to the admin and waits for ratify. *To build —
+  surface that posts to admin and waits for ratify. *To build —
   ~120 lines.*
 - `coat audit --entity X --since T` CLI for the next scene. *To
   build — ~80 lines.*
@@ -356,15 +414,16 @@ Sized rough.
 | 5 | SQLite triggers / bridge watcher emitting CDC into `WORKFLOW_OBS` | 3 | ~60 lines |
 | 6 | `coat watch` live-stream CLI | 3, 6 | ~80 lines |
 | 7 | `coat agent onboard` CLI — natural-language → manifest derivation, ratification UX | 4 | ~140 lines |
-| 8 | Manifest derivation logic — Claude-powered scope inference + curated fallback | 4 | ~80 lines |
+| 8 | Manifest derivation logic — Claude-powered scope + bundle inference + curated fallback | 4 | ~80 lines |
 | 9 | `AGENTS` table + trial-mode budget plumbing | 4, 5 | ~70 lines |
-| 10 | Atlas — non-Claude reasoning model wrapper (o3 / Gemini) + system prompt + tool loop | 5 | ~180 lines |
-| 11 | Synthetic external data CSVs (weather + shipping disruptions) | 5 | trivial |
-| 12 | `cap.denied` path + "scope expansion request" inline-ratification surface | 5 | ~120 lines |
-| 13 | `coat audit --entity` CLI | 6 | ~80 lines |
+| 10 | `external_sources/` registry + adapters (weather, news), `EXTERNAL_SIGNALS` table | 4, 5 | ~200 lines + fixtures |
+| 11 | `get_inventory_context(window, scope?)` MCP tool — assembles ERP + change boundary + patterns + external signals into one bundle | 5 | ~150 lines |
+| 12 | Atlas — non-Claude reasoning model wrapper (o3 / Gemini) + system prompt + tool loop | 5 | ~180 lines |
+| 13 | `cap.denied` path + "scope expansion request" inline-ratification surface | 5 | ~120 lines |
+| 14 | `coat audit --entity` CLI | 6 | ~80 lines |
 
-Total: roughly 1,100 lines of new code, plus two CSV fixtures. All
-additive, none of it requires changes to the core adapter or
+Total: roughly 1,300 lines of new code, plus a few CSV fixtures.
+All additive, none of it requires changes to the core adapter or
 discovery beyond the confidence-scoring extension.
 
 ---

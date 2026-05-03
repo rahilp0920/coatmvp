@@ -5,14 +5,17 @@ This document describes how Coat dynamically structures **context**,
 plugin sitting next to it — can drive an unfamiliar ERP without ever
 seeing the underlying schema.
 
-The four ideas that matter:
+The five ideas that matter:
 
 1. **Discovery** turns an unknown ERP into a typed, business-keyed map.
 2. **Adapter** translates business-concept calls into whatever the
    underlying ERP needs, and is the sole write path.
-3. **Tool surface** is the single MCP-shaped contract that every agent
-   and every plugin consumes.
-4. **Learner** turns the audit log of past tool calls back into rules
+3. **Context bundles** assemble ERP data + change history + learned
+   patterns + external signals into single business-shaped objects
+   the agent reasons over (instead of stitching plumbing).
+4. **Tool surface** is the single MCP-shaped contract that every agent
+   and every plugin consumes — both primitives and bundles.
+5. **Learner** turns the audit log of past tool calls back into rules
    that bias the next decision.
 
 Each is independently extensible.
@@ -129,7 +132,133 @@ Three files touched, no schema changes, no agent code changes.
 
 ---
 
-## 3. Agent and plugin interface (MCP)
+## 3. Context bundles — the layer agents actually call
+
+The primitive tools above (`get_stock`, `find_item`, etc.) are
+correct and necessary, but they are **not** the recommended surface
+for third-party agents. Most agents should call **context bundle
+tools**: high-level, business-shaped, fully-assembled views over
+the data Coat owns plus external signals Coat has registered.
+
+### Why a bundle layer exists
+
+A naive design hands the agent a dozen primitive tools and lets it
+stitch them together. That has three failure modes:
+
+1. **The agent burns tokens on plumbing.** Half the reasoning
+   budget goes to "now call this, now call that, now join them"
+   instead of the actual decision.
+2. **The agent has to know about external sources.** It calls
+   Coat's stock tool, then it has to call a weather API directly,
+   handle auth, parse RSS — none of which is what the agent
+   should be doing.
+3. **The integration surface is brittle.** Every time Coat adds a
+   new signal source, every agent that should benefit has to be
+   updated to call it.
+
+Bundles fix all three. The agent calls one tool, gets a single
+business-shaped object, and spends its tokens on the reasoning.
+Coat assembles. Atlas reasons.
+
+### What's in a bundle
+
+The shape is per-domain. The inventory bundle, used in scene 5 of
+the demo runbook, looks like:
+
+```yaml
+InventoryContext:
+  as_of: timestamp
+  window: duration
+  items:
+    - sku
+      name
+      on_hand_by_warehouse        # from ERP
+      available_after_reservations # from adapter (composes WH_STOCK + Z_RESERVED)
+      movement_last_60d           # from change boundary (MSEG)
+      learned_routing             # from learner (enforced ROUTING patterns)
+      external_signals:           # from registered external sources
+        weather_demand_modifier
+        weather_summary
+        supply_chain_risk
+        news_summary
+  context_origin:                 # provenance — what fed this bundle
+    - "ERP: WH_STOCK + BIN_DETAIL + Z_RESERVED"
+    - "Change boundary: MSEG, last 60d"
+    - "Learner: 3 enforced ROUTING patterns"
+    - "External: Open-Meteo, RSS shipping"
+```
+
+`context_origin` is mandatory and visible. The agent can cite it,
+the audit log preserves it, the human reviewing a recommendation
+can trace every input back to its source.
+
+### External sources are registered with Coat, not called by agents
+
+The fundamental architectural commitment: external data sources
+(weather, supply-chain news, sanctions lists, market data, third-
+party benchmarks) are configured at the tenant level under
+`config/connections/external/*.yaml`. Coat's bridge or sidecar
+fetches from them on schedule, normalizes the records into an
+`EXTERNAL_SIGNALS` table keyed by business entity, and the bundle
+assembler joins from that table at call time.
+
+The agent never sees an API key. The agent never makes an outbound
+HTTP call. The agent receives context.
+
+### How a bundle is assembled
+
+```
+get_inventory_context(window=7d, scope=top_skus)
+   │
+   ├─ adapter.get_stock(...)            ← ERP layer
+   ├─ adapter.recent_movements(...)     ← change-boundary layer
+   ├─ learner.enforced_patterns(ROUTING)
+   ├─ external_signals.lookup(entity_kind=item, …)  ← pre-fetched, per tenant
+   │
+   └─ compose into InventoryContext   ← documented schema, versioned
+```
+
+The composition is deterministic and reviewable. No LLM call inside
+bundle assembly — the bundle is data, not text generation. (The
+agent is free to do whatever LLM reasoning it wants on top of the
+bundle; Coat does not.)
+
+### Bundles compose primitives, they do not replace them
+
+The primitive tools (`get_stock`, `find_item`, `post_invoice`,
+`request_approval`, `submit_feedback`) are still the surface for:
+
+- Fine-grained work where the agent already has all the context
+  it needs and just needs to act.
+- Plugins that want to compose their own bundle for a domain Coat
+  doesn't have a first-party bundle for yet.
+- Audit and admin tooling.
+
+Most third-party agents — like Atlas — should call bundles. Most
+plugins authored by partners should call bundles. The MCP server
+exposes both layers, and the manifest derivation in
+`AGENT_PROTOCOL.md` will recommend the bundle path for any agent
+whose description doesn't explicitly say "I write to the ERP."
+
+### Adding a new bundle
+
+1. Define the bundle's data class in `mcp_server/bundles/<name>.py`
+   (e.g. `inventory.py`, `vendor.py`, `invoice.py`). Use TypedDict
+   or pydantic; the schema is the contract.
+2. Implement the assembler — it reads from the adapter primitives,
+   the change boundary, the learner, and `EXTERNAL_SIGNALS`. No
+   LLM calls.
+3. Register a tool in `mcp_server/server.py` (e.g.
+   `get_inventory_context`) that calls the assembler.
+4. Document the `context_origin` strings the assembler emits —
+   that's the auditable trail for the bundle.
+
+That's the entire extension model for "Coat learns to deliver a
+new kind of context."
+
+---
+
+## 4. Agent and plugin interface (MCP)
 
 The MCP server in `mcp_server/server.py` is the contract. Every agent
 and every plugin sees the same nine tools, with the same JSON-Schema
@@ -214,7 +343,7 @@ runtime:
 
 ---
 
-## 4. Learning substrate (`learner/`)
+## 5. Learning substrate (`learner/`)
 
 `learner/miner.py` reads `WORKFLOW_OBS` and produces three families of
 patterns:
