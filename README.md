@@ -45,6 +45,8 @@ coatmvp/
 ├─ OBSERVABILITY.md       how Coat sees / what it remembers / what it learns
 ├─ AGENT_PROTOCOL.md      how agents identify, scope capabilities, and audit through Coat's MCP surface
 ├─ DEPLOYMENT.md          deployment shapes, configuration layering, visibility surfaces (admin / auditor)
+├─ COMPLIANCE.md          posture today, frameworks that matter, roadmap, architecture-level enablers
+├─ DEMO_RUNBOOK.md        the 6-scene demo storyline + per-scene infrastructure build map
 └─ erp_adapter/           the working pipeline
    ├─ mock_erp/           messy SAP-style schema + seeded data
    ├─ discovery/          schema introspection + semantic mapping
