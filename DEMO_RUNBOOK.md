@@ -474,7 +474,35 @@ events landing in rapid succession. That's Coat seeing the work
 happen at the change boundary — exactly the architecture from
 `OBSERVABILITY.md`: subscribe at the change boundary, never poll.
 
-**Then re-run Atlas:**
+**Then refine the catalog from those observations:**
+
+```bash
+coat refine --window 2h
+```
+
+**On screen:** a row-per-concept table showing confidence bumps.
+Six concepts get visibly upgraded — `item`, `warehouse`,
+`stock_by_warehouse`, `stock_by_bin`, `reservation`, and
+`stock_movement` each rise by +0.06 because Coat watched the
+operator's consumption workflow touch each of those tables in a
+consistent pattern. The custom Z-table (`Z_RESERVED` →
+`reservation`) is the most striking lift: it had a low structural
+score because no FK points at it, but operator behavior just
+confirmed the inferred semantics. Discovery was the prior;
+observations are the posterior.
+
+**Voice:** *"Day-one discovery is a hypothesis — we ask the database
+what we think each table is, with confidence scores. But that's a
+prior, not the truth. Watch what happens when the system gets used.
+Coat saw an operator fulfill thirty orders in the last eight hours.
+Each order touched the item table, the warehouse table, the bin
+table, the movement log, and a reservation row. Those co-occurrences
+ARE the evidence. Confidence on six concepts just went up. The
+custom Z-table with no foreign keys — that one we used to be unsure
+about — went from 0.82 to 0.89. Coat got sharper because someone
+worked."*
+
+**Then re-run Atlas to see the inventory side:**
 
 ```bash
 atlas --scripted
@@ -482,7 +510,7 @@ atlas --scripted
 
 (or `atlas` with your provider key — the live-mode path is identical.)
 
-**On screen:** SKU-300's row shifts on three columns at once.
+SKU-300's row also shifts on three columns at once:
 
 | | before activity | after activity |
 |---|---|---|
@@ -586,7 +614,8 @@ rails do."*
 | 12 | `coat audit --entity` entity timeline + capability provenance | 6 | ✓ shipped | `cli/coat_audit.py` |
 | 13 | `coat` console-script entry point (after `pip install -e .`) | all | ✓ shipped | `pyproject.toml` |
 | 14 | Demo seed overrides for visible risk-band spread (SKU-441 / SKU-200 → HIGH) | 5 | ✓ shipped | `mock_erp/seed.py` |
-| 15 | `coat sim activity` (employee at change boundary) + `feedback` + `news` — real-time context refinement for the "living layer" beat | 5b | ✓ shipped | `cli/coat_sim.py`, bundle MAX-risk aggregation, Atlas risk-band amplification |
+| 15 | `coat sim activity` + `feedback` + `news` — change-boundary observation, the "living layer" beat | 5b | ✓ shipped | `cli/coat_sim.py`, bundle MAX-risk aggregation, Atlas risk-band amplification |
+| 16 | `coat refine` — raise concept-catalog confidence from observed operator workflows | 5b | ✓ shipped | `cli/coat_refine.py` |
 
 Six things deliberately *cut* from the build:
 
@@ -652,12 +681,11 @@ coat agent onboard
 atlas "what's our stockout risk for next week, and what should we reorder?"
 # → forecast table with SKU-441 HIGH and SKU-200 HIGH
 
-# Scene 5b — Real-time context update (30s)
+# Scene 5b — Real-time context update (45s, the "living layer" beat)
 coat sim activity --sku SKU-300 --qty 25 --warehouse WH02 --repeat 30 --over-hours 8
-atlas
-# → same agent, same scopes — but the forecast shifted because Coat
-#   observed an employee working in the ERP. WH02 drained, Atlas
-#   pivots to WH01, projected demand nearly doubles.
+coat refine --window 2h            # confidence rises on six concepts (incl. reservation)
+atlas                              # forecast shifts: WH02 drained, Atlas pivots to WH01,
+                                   # projected demand nearly doubles
 
 # Scene 5c — Mid-flight ratification (40s)
 atlas --demo-denial

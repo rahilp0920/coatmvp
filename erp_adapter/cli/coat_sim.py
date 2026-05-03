@@ -1,4 +1,4 @@
-"""`coat sim` — inject simulated activity for live demos.
+"""coat sim — inject simulated activity for live demos.
 
 Used during recordings to show that Coat is a *living* layer: an
 employee posts something in the ERP, a manager corrects a routing
@@ -22,6 +22,7 @@ new state on its next bundle assembly. No restart, no re-init.
 from __future__ import annotations
 
 import json
+import random
 import sqlite3
 import sys
 import uuid
@@ -262,6 +263,21 @@ def activity(
                 """,
                 (f"DOC{mblnr_seq}", sku, warehouse, this_qty, actor, ts),
             )
+
+            # ~40% of consumes are tied to a sales-order reservation that
+            # gets fulfilled. Write the reservation row so Coat sees the
+            # Z_RESERVED table being touched in the same operator workflow
+            # — that's evidence the inferred 'reservation' concept is real.
+            if this_qty > 0 and random.random() < 0.40:
+                conn.execute(
+                    """
+                    INSERT INTO Z_RESERVED
+                        (MATNR, WERKS, QTY, REF_DOC, CREATED_AT, EXPIRES_AT)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (sku, warehouse, this_qty,
+                     f"SO-FULFILLED-{mblnr_seq}", ts, ts),
+                )
 
             # WORKFLOW_OBS — the change-boundary event Coat observes
             _log_obs(

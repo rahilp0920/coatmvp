@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from cli import (  # noqa: E402
     agent_onboard, agent_list, agent_grant,
-    coat_audit, coat_init, coat_watch, coat_sim,
+    coat_audit, coat_init, coat_watch, coat_sim, coat_refine,
 )
 
 
@@ -101,6 +101,14 @@ def main() -> None:
     revoke_scope.add_argument("agent_id")
     revoke_scope.add_argument("scope")
     revoke_scope.add_argument("--reason", default=None)
+
+    # ---- refine ----
+    refine = sub.add_parser(
+        "refine",
+        help="raise concept-catalog confidence from recent operator observations",
+    )
+    refine.add_argument("--window", default="2h",
+                        help="observation window: 30m / 2h / 24h / 7d (default 2h)")
 
     # ---- audit ----
     audit = sub.add_parser("audit", help="entity timeline view of WORKFLOW_OBS + capability provenance")
@@ -188,6 +196,8 @@ def main() -> None:
             agent_grant.revoke_scope(args.agent_id, args.scope, reason=args.reason)
         else:
             parser.error(f"unknown agent subcommand {args.agent_cmd!r}")
+    elif args.cmd == "refine":
+        coat_refine.refine(window=args.window)
     elif args.cmd == "audit":
         coat_audit.audit_entity(args.entity, since=args.since)
     elif args.cmd == "sim":
