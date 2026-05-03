@@ -8,8 +8,82 @@ The recording is async, so retakes are free. The point is not heroic
 liveness — it is a tight, opinionated story that lands in under five
 minutes.
 
-The whole thing runs in VS Code with Claude Code open and the project
-loaded. Split-pane: editor left, terminal right.
+The whole thing runs in VS Code. Three-pane layout:
+
+- **Editor pane (left):** the project files. Open `CLAUDE.md` and the
+  agent description file you'll paste in scene 4. Optionally Claude
+  Code in the side panel.
+- **Watch pane (top-right):** `coat watch` running. Live tail of
+  `WORKFLOW_OBS` + capability grants. This pane *is* Coat being on,
+  ambient through the whole recording.
+- **Work pane (bottom-right):** where you type. All commands here.
+
+One-time setup before recording:
+
+```bash
+cd ~/coatmvp/erp_adapter
+python3.11 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+pip install -e .              # registers `coat` and `atlas` as binaries
+```
+
+After this, every command in the runbook is `coat ...` or `atlas`.
+
+## Live-mode validation (do this once before recording)
+
+Atlas runs in two modes — *scripted* (deterministic reasoning over the
+bundle, no LLM call, runs offline) and *live* (real tool-use loop with
+whichever provider has an API key in the env). Recording-grade
+demos use live mode because the agent's voice — the reasoning between
+the bundle and the recommendation — is the most distinctive moment.
+
+`agents/provider.py` auto-picks the provider when `ATLAS_PROVIDER` is
+unset, preferring **non-Claude** providers when keys are present. That
+is deliberate: the most powerful talking point in scene 5 is
+*"different brain, same MCP surface, same answer."* Validate at least
+one non-Claude provider before recording.
+
+```bash
+# 1. Reset the world
+coat init
+coat agent onboard --from-file <(cat <<'EOF'
+Atlas — an inventory planning specialist. It needs to understand stock,
+movement velocity, learned patterns, and outside demand signals — weather,
+supply-chain news. It produces stockout risk and reorder recommendations.
+It doesn't post anything to the ERP.
+EOF
+) --provider openai --model o3 --auto-yes
+
+# 2. Anthropic — the safety net (always works if you have a key)
+ANTHROPIC_API_KEY=sk-ant-... \
+  ATLAS_PROVIDER=anthropic ATLAS_MODEL=claude-opus-4-6 \
+  atlas "what's our stockout risk for next week?"
+
+# 3. OpenAI — the recommended demo provider for the model-agnostic story
+pip install openai>=1.30
+OPENAI_API_KEY=sk-... \
+  ATLAS_PROVIDER=openai ATLAS_MODEL=o3 \
+  atlas "what's our stockout risk for next week?"
+
+# 4. Google Gemini — alternate
+pip install google-genai>=0.3
+GOOGLE_API_KEY=... \
+  ATLAS_PROVIDER=google ATLAS_MODEL=gemini-2.5-pro \
+  atlas "what's our stockout risk for next week?"
+```
+
+**Pass criteria for each provider:** Atlas calls
+`get_inventory_context` exactly once, the bundle returns, the model
+produces a recommendation table containing SKU-441 with HIGH risk and
+a non-zero reorder qty, and the reasoning notes cite the Suzhou
+brown-out (or the heat dome, or both). If a provider returns *more
+than one tool call* or hallucinates a tool name, that's a system-prompt
+issue — `agents/atlas.py:SYSTEM_PROMPT` is where to tighten.
+
+If a provider chokes (rate limit, model-name mismatch, timeout), fall
+back to scripted mode for the recording — `atlas --scripted` produces
+a deterministic forecast rendered identically. The voice-over still
+lands.
 
 ## Philosophy on screen
 
@@ -35,23 +109,29 @@ because it does, and the analyst is Coat.
 
 ## Scene 1 — Configure Coat into the workflow (employee perspective) — ~45s
 
-**On screen:** terminal in `~/coatmvp`. Run `coat init`. The CLI
-walks through: discover SAP-shaped schema in `mock_erp/erp.db`,
-introspect, ask Claude to label semantically, write `context.yaml`.
-Output is a clean banner with three lines per concept: name, table
-backing it, structural confidence.
+**Watch pane (already running):** `coat watch` showing the empty timeline.
+
+**Work pane:**
+
+```bash
+coat init
+```
+
+**On screen:** five-step pipeline runs in the work pane — build mock
+ERP, introspect, semantically map, render the concept catalog, mine
+historical patterns. The watch pane shows learner ticks landing in
+real time. The work pane ends with the green "Coat is installed" panel
+and the next-step menu.
 
 **Voice:** *"This is what a new customer sees on day one. We point Coat
 at their ERP. We don't ask for a schema map. We don't ask for an
-ontology. The discovery layer reads the database directly and figures
-out which physical tables back which business concepts. Ten minutes
-of compute, no consultant."*
+ontology. Discovery reads the database directly and figures out which
+physical tables back which business concepts. Ten minutes of compute,
+no consultant."*
 
-**Infrastructure required:**
-- `coat init` CLI wrapping the existing `run.py` pipeline with cleaner
-  output. *To build — ~50 lines.*
-- Existing `discovery/introspect.py` + `semantic_map.py`. *Works today.*
-- Confidence score per concept added to `context.yaml`. *To build — see scene 2.*
+**Infrastructure status:** ✓ shipped — `cli/coat_init.py` wraps the
+pipeline with the next-step menu. Confidence-scored context renders
+in step 3 (scene 2 below).
 
 ---
 
@@ -96,11 +176,13 @@ search the schema, it verifies the schema."*
 | Output | Documents, snippets | Tool calls, posted transactions, audit chain |
 | Where it sits | Indexes ERP exports, generic | At the change boundary, ERP-native |
 
-**Infrastructure required:**
-- Confidence-scoring function added to `discovery/semantic_map.py`.
-  Tests run against the dossier: column-name shape, sample-value
-  distribution, FK consistency, cardinality. *To build — ~80 lines.*
-- Output rendering with confidence bars. *To build — small extension to `agent/demo.py` or new `cli/render_concepts.py`. ~30 lines.*
+**Infrastructure status:** ✓ shipped.
+- `discovery/confidence.py` runs structural verification per concept
+  (PK shape, FK referrer count, sample distribution match for
+  country/currency/status/flag/numeric/date roles).
+- `cli/render_concepts.py` renders the rich catalog with confidence
+  bars colored green / yellow / red.
+- Confidence + evidence is baked into `context.yaml` — auditable on disk.
 
 ---
 
@@ -139,25 +221,22 @@ changes flows into the observation log, the learner picks it up, and
 patterns emerge from real activity. No polling. No 'please send us
 your data.' We see what the ERP already emits."*
 
-**Infrastructure required:**
-- `sap_rails/` module: a small Python CLI that bypasses Coat's
-  adapter and writes directly to AP_HEAD / MSEG, mimicking a SAP
-  transaction. *To build — ~120 lines.*
-- A SQLite trigger or a small `bridge/` watcher that detects writes
-  outside Coat's adapter and emits a normalized `ChangeEvent` into
-  `WORKFLOW_OBS`. *To build — ~60 lines (triggers route).*
-- `coat watch` CLI that tails `WORKFLOW_OBS` and the learner tick,
-  rendered with `rich`. *To build — ~80 lines.*
-- Existing `learner/miner.py`. *Works today.*
+**Infrastructure status:** partial — `coat watch` ✓ shipped. The
+SAP-rails simulator + change-boundary trigger were *cut* for the
+recording: the existing scripted demo at `python run.py` already shows
+pattern emergence (V1001 fast-track + fragile_source_warehouse); the
+voice-over covers the "Coat sits at the change boundary" story
+without needing a separate simulator. The watch pane in the corner
+makes the architecture visible regardless.
 
 ---
 
 ## Scene 4 — Onboard a specialized external agent in plain English — ~75s
 
-**On screen:** terminal. The admin runs:
+**Work pane:**
 
-```
-$ coat agent onboard
+```bash
+coat agent onboard
 ```
 
 Coat asks one question: *"What does this agent do? Describe it like
@@ -222,32 +301,24 @@ already registered with Coat at the tenant level. Atlas doesn't
 fetch. Atlas reasons over what Coat hands it. As easy as
 wearing a coat."*
 
-**Infrastructure required:**
-- `coat agent onboard` CLI: prompts for description, asks Claude to
-  parse it into a manifest (description → tasks → required scopes
-  → required context bundles), renders the proposal with explicit
-  "granted" and "denied" lines, persists on ratify. *To build —
-  ~140 lines.*
-- Manifest derivation logic: takes a description + Coat's tool /
-  bundle catalog and returns the minimal scope and bundle set.
-  Claude-powered with a curated keyword fallback for offline. *To
-  build — ~80 lines.*
-- "Trial mode" budget + expiry plumbing. *To build — ~40 lines.*
-- `AGENTS` table — id, manifest, trial_budget, next_review.
-  *To build — schema + 30 lines.*
-- `config/connections/external/*.yaml` — per-tenant external source
-  registry (weather provider, news feed, sanctions list, etc.).
-  *To build — schema + ~60 lines.*
+**Infrastructure status:** ✓ shipped.
+- `coat agent onboard` CLI with three-stage manifest derivation
+  (LLM-powered task extraction with deterministic keyword fallback,
+  scope projection, proposal assembly).
+- `AGENTS` + `CAPABILITY_GRANTS` tables with full audit chain.
+- Trial-mode budget + expiry plumbing.
+- External-source registry and `EXTERNAL_SIGNALS` table seeded with
+  weather + shipping_news synthetic providers (Open-Meteo + RSS shape).
 
 ---
 
 ## Scene 5 — Ask Atlas a real question; mid-flight permission expansion — ~75s
 
-**On screen:** Claude Code in the editor pane (or a terminal chat —
-either works). The admin types:
+**Work pane:**
 
-> *"Atlas, what's our stockout risk for next week, and what should
-> we reorder?"*
+```bash
+atlas "what's our stockout risk for next week, and what should we reorder?"
+```
 
 Atlas makes **one** tool call: `get_inventory_context(window=7d)`.
 Coat receives it, assembles the bundle from every relevant source
@@ -302,26 +373,39 @@ Reasoning:
   • SKU-300 stable; consistent with movement trend
 ```
 
-The admin replies:
+**Work pane (admin types this):**
 
-> *"Stage the reorder PO for SKU-441."*
-
-Atlas tries to call `create_purchase_order`. Coat returns:
-
-```
-cap.denied  create_purchase_order  agent=atlas@coat.io/v1
-            reason: scope coat:procurement:write not granted
-            this scope was NOT in the original manifest
-
-Coat surfaces the request to admin:
-  Atlas is asking for a new capability:
-    coat:procurement:write@vendor=*,max_amount=$5,000
-  Atlas's current task argues for granting this — review?  [y/n]
+```bash
+atlas --demo-denial
 ```
 
-The admin presses `y`. Coat updates the manifest, the trial budget
-expands by one scope, the call retries, the PO is staged. Audit
-trail captures the whole arc.
+Atlas tries `move_stock` to rebalance SKU-441 from WH02 to WH01.
+The dispatcher checks Atlas's manifest — `coat:inventory:write` is
+not granted. Instead of failing silently, Coat surfaces the request
+**inline in the same terminal**:
+
+```
+╭──────────────────────────────── Coat ────────────────────────────────╮
+│  scope-expansion request                                             │
+│    agent  : atlas@coat.io/v1                                         │
+│    asks   : coat:inventory:write                                     │
+│    to do  : move_stock(matnr=SKU-441)                                │
+│    reason : agent does not hold coat:inventory:write                 │
+│    audit  : aud_e3e58f58af6d4447a7faac94dbea17e6                     │
+╰──────────────────────────────────────────────────────────────────────╯
+Approve this scope for this agent? [y/n]
+> y
+```
+
+Admin types `y`. Coat grants the capability (full audit row, origin
+`admin`, note `inline ratification (mid-flight)`), updates the manifest,
+retries the call automatically. Result panel: *"atlas resolved its own
+permission ask — DOC1777828213 posted, qty=30, WH02→WH01, scope used:
+coat:inventory:write."*
+
+The admin never typed a scope string. The agent surfaced what it
+needed. The human said yes. The capability lifecycle ratchet moved
+exactly one click.
 
 **Voice:** *"Atlas runs under the scopes Coat inferred. Atlas is
 **reasoning**, not plumbing. The agent made one tool call and got
@@ -335,35 +419,43 @@ sides meet. Then — when Atlas tries to write something it wasn't
 authorized for, Coat surfaces the gap inline. Mid-flight
 ratification. One human keystroke. Audited end to end."*
 
-**Infrastructure required:**
-- Atlas as a configured agent backed by a non-Claude reasoning model
-  (e.g., `openai/o3` or `google/gemini-2.5-pro`). *To build — ~180
-  lines: client wrapper + system prompt + tool-call loop.*
-- `get_inventory_context(window, scope?)` MCP tool on the adapter:
-  reads ERP stock + bins + reservations, joins recent MSEG
-  movements, joins enforced ROUTING patterns, joins external
-  signals from registered sources, returns a single bundle.
-  *To build — ~150 lines (most of the joins exist; this is
-  composition).*
-- External-source registry + adapter: `external_sources/` directory
-  with one module per source type (`weather.py`, `news_rss.py`).
-  Each emits records into a `EXTERNAL_SIGNALS` table keyed by
-  entity (SKU, vendor, region). The context-bundle assembler reads
-  from this table by key, not by going to the source live.
-  *To build — ~200 lines + 2 small CSV fixtures.*
-- `cap.denied` path on tool dispatch + "scope expansion request"
-  surface that posts to admin and waits for ratify. *To build —
-  ~120 lines.*
-- `coat audit --entity X --since T` CLI for the next scene. *To
-  build — ~80 lines.*
-- `COMPLIANCE.md` for the verbal claim. *Already in repo.*
+**Infrastructure status:** ✓ shipped.
+- Atlas — `agents/atlas.py` + `agents/provider.py`. Provider-agnostic
+  factory (Anthropic / OpenAI / Google) with one tool-use loop
+  interface; auto-prefers non-Claude when keys are present; scripted
+  fallback for offline.
+- `mcp_server/bundles/inventory.py:get_inventory_context` — the bundle
+  assembler. Composes ERP + change-boundary + learner + external
+  signals + `context_origin` provenance.
+- `external_sources/` registry — `weather.py` (synthetic Open-Meteo
+  shape) and `shipping_news.py` (synthetic RSS advisories tied to
+  SKU-441 / SKU-200 / WH03). `EXTERNAL_SIGNALS` table keyed by
+  `(source, entity_kind, entity_key)`.
+- `mcp_server/dispatch.py` — scope-aware dispatch with **inline
+  mid-flight ratification**. TTY-detected by default;
+  `COAT_FORCE_INLINE_RATIFY=1` forces on, `COAT_NO_INLINE_RATIFY=1`
+  disables. On `y` the capability is granted (full audit), the call
+  retries, the result lands.
+- `coat audit --entity X --since T` ✓ shipped.
+- `COMPLIANCE.md` ✓ in repo.
+
+**Demo seed overrides:** `seed.py:apply_demo_overrides()` drains
+SKU-441 (HIGH risk, reorder 133) and SKU-200 (HIGH risk, reorder 40)
+so the forecast lands a real procurement decision instead of a calm
+"everything LOW" table. SKU-300 / SKU-500 / SKU-100 etc. stay LOW —
+the calm baseline that makes the HIGHs visible.
 
 ---
 
 ## Scene 6 — Full circle, audit chain, the thesis — ~25s
 
-**On screen:** `coat audit --entity SKU-441 --since 1h` — the entity
-timeline that ties the whole story together:
+**Work pane:**
+
+```bash
+coat audit --entity SKU-441 --since 1h
+```
+
+The entity timeline that ties the whole story together:
 
 ```
 ENTITY TIMELINE — item / SKU-441   (last hour)
@@ -400,31 +492,47 @@ rails do."*
 
 ---
 
-## Build map — what has to exist for the recording
+## Build map — actual code shipped
 
-Eight pieces of code, each small, each independently testable.
-Sized rough.
+| # | Piece | Scene(s) | Status | File(s) |
+|---|-------|----------|--------|---------|
+| 1 | Confidence scoring per concept | 1, 2 | ✓ shipped | `discovery/confidence.py` |
+| 2 | Concept catalog renderer (rich table, confidence bars, evidence summary) | 1, 2 | ✓ shipped | `cli/render_concepts.py` |
+| 3 | `coat init` bootstrap | 1 | ✓ shipped | `cli/coat_init.py` |
+| 4 | `coat watch` live tail of `WORKFLOW_OBS` + capability grants | all (ambient) | ✓ shipped | `cli/coat_watch.py` |
+| 5 | `coat agent onboard` CLI + manifest derivation (LLM + curated fallback) | 4 | ✓ shipped | `cli/agent_onboard.py`, `agents/manifest_derivation.py` |
+| 6 | `AGENTS` + `CAPABILITY_GRANTS` tables, trial-mode budget plumbing | 4, 5 | ✓ shipped | `mock_erp/schema.sql` |
+| 7 | `external_sources/` registry + weather/shipping_news synthetic providers, `EXTERNAL_SIGNALS` | 4, 5 | ✓ shipped | `external_sources/*.py` |
+| 8 | `get_inventory_context` bundle assembler | 5 | ✓ shipped | `mcp_server/bundles/inventory.py` |
+| 9 | Atlas — provider-agnostic agent (Anthropic / OpenAI / Google) | 5 | ✓ shipped | `agents/atlas.py`, `agents/provider.py` |
+| 10 | Scope-aware dispatch + cap.denied + inline mid-flight ratification | 5 | ✓ shipped | `mcp_server/dispatch.py` |
+| 11 | `coat agent grant` / `revoke-scope` CLI | 5 | ✓ shipped | `cli/agent_grant.py` |
+| 12 | `coat audit --entity` entity timeline + capability provenance | 6 | ✓ shipped | `cli/coat_audit.py` |
+| 13 | `coat` console-script entry point (after `pip install -e .`) | all | ✓ shipped | `pyproject.toml` |
+| 14 | Demo seed overrides for visible risk-band spread (SKU-441 / SKU-200 → HIGH) | 5 | ✓ shipped | `mock_erp/seed.py` |
 
-| # | Piece | Scene(s) | Size |
-|---|-------|----------|------|
-| 1 | Confidence-scoring in `discovery/semantic_map.py` | 1, 2 | ~80 lines |
-| 2 | `cli/render_concepts.py` (catalog with confidence bars) | 1, 2 | ~30 lines |
-| 3 | `coat init` CLI wrapper around `run.py` | 1 | ~50 lines |
-| 4 | `sap_rails/` direct-write SAP simulator | 3 | ~120 lines |
-| 5 | SQLite triggers / bridge watcher emitting CDC into `WORKFLOW_OBS` | 3 | ~60 lines |
-| 6 | `coat watch` live-stream CLI | 3, 6 | ~80 lines |
-| 7 | `coat agent onboard` CLI — natural-language → manifest derivation, ratification UX | 4 | ~140 lines |
-| 8 | Manifest derivation logic — Claude-powered scope + bundle inference + curated fallback | 4 | ~80 lines |
-| 9 | `AGENTS` table + trial-mode budget plumbing | 4, 5 | ~70 lines |
-| 10 | `external_sources/` registry + adapters (weather, news), `EXTERNAL_SIGNALS` table | 4, 5 | ~200 lines + fixtures |
-| 11 | `get_inventory_context(window, scope?)` MCP tool — assembles ERP + change boundary + patterns + external signals into one bundle | 5 | ~150 lines |
-| 12 | Atlas — non-Claude reasoning model wrapper (o3 / Gemini) + system prompt + tool loop | 5 | ~180 lines |
-| 13 | `cap.denied` path + "scope expansion request" inline-ratification surface | 5 | ~120 lines |
-| 14 | `coat audit --entity` CLI | 6 | ~80 lines |
+Six things deliberately *cut* from the build:
 
-Total: roughly 1,300 lines of new code, plus a few CSV fixtures.
-All additive, none of it requires changes to the core adapter or
-discovery beyond the confidence-scoring extension.
+- SAP-rails simulator that bypasses the adapter (scene 3 was reframed —
+  the existing `python run.py` step "5/5 Run agent demo" already shows
+  pattern emergence; the watch pane covers the change-boundary story).
+- SQLite trigger CDC watcher (replaced by the simpler — and equally
+  legible — story of `coat watch` tailing `WORKFLOW_OBS`).
+- A full crypto handshake for the agent protocol (the inline-ratify UX
+  + the audit chain land the protocol's *meaning* without yet shipping
+  Ed25519 + signed envelopes).
+- Multi-tenant config tree (`coat.yaml` + `config/connections/*.yaml`)
+  — specced in `DEPLOYMENT.md`, not built; not required for a single-
+  tenant demo.
+- Web admin UI / ratification queue dashboard — terminal output is
+  cleaner for a recording.
+- 3-way invoice match — the original day-zero pick. Atlas's inventory
+  story is more product-distinctive and lands the same architectural
+  beats.
+
+Total shipped: ~3,960 lines of production Python across 18 new files,
+plus the architecture docs. All additive on top of Prince's original
+pipeline.
 
 ---
 
@@ -437,24 +545,150 @@ map is the highest-stakes still frame), then scenes 1 → 3 → 4 → 5 →
 
 ---
 
-## Status at the time of writing
+## Recording sequence — exact commands, in order
 
-Built today (works in your repo right now):
-- Discovery + semantic map (without confidence scoring yet)
-- Adapter, MCP tool surface, learner, scripted demo
-- Pattern catalog visible via `python run.py inspect`
+After the one-time setup at the top of this doc, the recording runs
+through these commands. Every box is one command. The watch pane is
+already running in the corner.
 
-Not yet built (the list above):
-- Confidence scoring on the concept map
-- SAP-rails simulator + CDC bridge
-- `coat agent onboard` CLI + manifest derivation
-- Atlas (specialized non-Claude inventory agent)
-- `cap.denied` + scope-expansion ratification surface
-- `coat init`, `coat watch`, `coat audit` CLIs
+```bash
+# Scene 1 — Configure (45s)
+coat init
 
-Next move: greenlight the build, pick scene-1-and-2 as the first
-slice (confidence-scored context map), and ship that today.
-Scene 4 (the "as easy as wearing a coat" onboarding) is the
-second slice — it's the one that lands the philosophy on screen.
-Scene 5 (Atlas + mid-flight ratification) is the third. Recording
-on day three or four.
+# Scene 2 — Concept catalog with confidence (60s)
+# Already rendered as step 3 of `coat init`. Pause on the table.
+# (Optional drill-in:)
+python -m cli.render_concepts --concept item
+
+# Scene 3 — Voice-over the change-boundary architecture (60s)
+# The watch pane shows pattern emergence as `coat init` ran.
+# (Optional explicit:)
+python -m learner.miner            # show pattern table refresh
+coat audit --entity V1001 --since 1h    # see vendor_fast_track origin
+
+# Scene 4 — Onboard Atlas in plain English (75s)
+coat agent onboard
+# → describe the agent (paste from README or type)
+# → ratify with `r`
+
+# Scene 5 — Atlas reasons + mid-flight ratification (75s)
+atlas "what's our stockout risk for next week, and what should we reorder?"
+# → forecast table with SKU-441 HIGH and SKU-200 HIGH
+
+atlas --demo-denial
+# → scope-expansion request panel renders
+# → type `y` to ratify
+# → call retries, DOC posted, "atlas resolved its own permission ask"
+
+# Scene 6 — Full circle audit (25s)
+coat audit --entity SKU-441 --since 1h
+```
+
+That is the complete recording, command by command. Total: ~5 minutes.
+
+---
+
+## Status — what's built and what's not
+
+**Built and verified end-to-end** (everything in the build map above):
+the entire demo runs against the mock SAP-shaped ERP that ships with
+the repo. `coat init && coat agent onboard && atlas && atlas --demo-
+denial && coat audit` is the full path, no manual setup beyond the
+one-time `pip install -e .`.
+
+**Deliberately cut** (see "Six things deliberately cut" above): the
+SAP-rails simulator, SQLite trigger CDC watcher, full crypto handshake,
+multi-tenant config tree, web admin UI, and 3-way invoice match — each
+specced in the architecture docs but not required for the recording.
+
+**On the path to production** (in `DEPLOYMENT.md`, `OBSERVABILITY.md`,
+`AGENT_PROTOCOL.md`, `COMPLIANCE.md`): real CDC observers per ERP
+backend, the Coat Bridge agent for hybrid deployments, multi-tenant
+config + ratification queue UI, SOC 2 / ISO 27001 / GDPR / SAP
+Endorsed Apps roadmap.
+
+**Next moves before recording:**
+1. Pull on your Mac, `pip install -e .`, run the full path once.
+2. Validate Atlas live mode against your preferred provider — see
+   "Live-mode validation" section near the top of this doc.
+3. Practice the recording sequence twice, time it (target 4:30).
+4. Record. Cut. Ship.
+
+---
+
+## Practice script — what to do, what to say, what to pause on
+
+This is the second-pass version that builds on "Recording sequence."
+Use it for dry runs.
+
+### Terminal setup (do once)
+
+- One VS Code window. Three terminals:
+  - **Top-right (watch):** `coat watch` — leave running for the whole
+    take. Fontsize one notch larger than the others; the eye returns
+    to it during voice-over beats.
+  - **Bottom-right (work):** the typing pane. Wide enough for a
+    five-column rich table to fit on one line (~120 chars).
+  - **Optional left (editor):** open `CLAUDE.md` so when the camera
+    pans there it's the manifesto, not random Python.
+- Theme: dark. Dot-matrix-y if you can. The cyan / yellow / red bars
+  in Coat's output read best on dark.
+- Hide the AI assistant pane during the recording — Coat is the agent
+  here, not the IDE's copilot.
+- Set `PS1='$ '` so the prompts are minimal. No git branch noise.
+
+### Beat-by-beat (target 4:30)
+
+| t  | scene | beat | say |
+|----|-------|------|-----|
+| 0:00 | open | wide shot of the layout, both panes visible, watch pane idle | *"This is Coat. We're an AI-native layer that sits on any ERP."* |
+| 0:08 | 1 | run `coat init` in work pane; watch pane lights up with seed/discovery/learner ticks | *"Day-one onboarding. We point Coat at the customer's ERP. No schema map. No ontology."* |
+| 0:30 | 2 | pause on the rendered concept catalog | *"Twelve concepts discovered. Each confidence is structural — we tested it against the data. Glean indexes documents and ranks by relevance. Coat doesn't search the schema, it verifies the schema."* |
+| 1:15 | 3 | watch pane briefly on screen, point at the learner tick rows | *"Coat sees what humans do directly in SAP. No polling. We subscribe at the change boundary."* |
+| 1:45 | 4 | run `coat agent onboard`, paste Atlas description, ratify with `r` | *"Onboarding an external agent. The admin describes the agent like a new hire. Coat infers the smallest scope set. Notice the scopes that are NOT granted — those are the safety lines."* |
+| 2:30 | 5a | run `atlas` with question, pause on forecast | *"Atlas is built on a different model — OpenAI o3, in this take. Coat's MCP surface is provider-agnostic. Atlas made one tool call. Got a fully-assembled bundle. Spent its tokens on reasoning."* |
+| 3:15 | 5b | run `atlas --demo-denial`, scope-expansion panel renders, type `y` | *"Atlas hits a permission it doesn't have. Watch — Coat asks the admin in plain English. One keystroke. The capability is granted with a full audit row, the call retries, the doc posts."* |
+| 4:00 | 6 | run `coat audit --entity SKU-441 --since 1h` | *"The whole arc, end to end. Every action chains back to the capability that authorized it. The capability chains back to the manifest the human ratified. Provenance is everything."* |
+| 4:25 | close | wide shot, watch pane still going | *"Coat. AI-native ERP. Walls don't matter."* |
+
+### Pause-on moments (the still frames)
+
+These are the screenshots that go into the deck and the email follow-up.
+Make sure each one is on screen for at least 3 full seconds.
+
+1. The concept catalog after `coat init` — confidence bars green / yellow.
+2. The "PROPOSED AGENT" panel during `coat agent onboard` — green
+   granted lines + red denied lines.
+3. Atlas's forecast table — SKU-441 HIGH next to SKU-300 LOW; reorder
+   column non-empty.
+4. The yellow "scope-expansion request" panel during `--demo-denial`.
+5. The audit timeline at the end — DENIED row in red, OK row in green,
+   capability provenance at the bottom showing manifest + admin grants.
+
+### Common pitfalls
+
+- **Watch pane scrolls off the most recent event.** Resize the work
+  pane down to keep watch in view, or scroll the watch pane down
+  before starting the take.
+- **Provider rate-limits mid-take.** The `--scripted` flag is the
+  fallback. Run `atlas --scripted "stockout risk?"` — same table,
+  no LLM. Voice-over the model-agnostic point with conviction.
+- **`coat init` re-runs reset the database** including any agents
+  you onboarded. If you re-init mid-recording, re-onboard Atlas
+  before scene 5. (Or do all takes from a single `coat init`.)
+- **Inline ratify doesn't fire because stdin isn't a TTY.** Make
+  sure you're typing into the terminal directly, not via a piped
+  script. If running headless, `COAT_FORCE_INLINE_RATIFY=1` forces
+  the prompt.
+
+### Recording tools
+
+- **macOS:** `Cmd-Shift-5` → "Record selected portion." Pick the
+  whole VS Code window, frame to hide the menu bar if it's
+  distracting. AAC 256kbps audio.
+- **Voice-over track:** if you want to redo the audio without redoing
+  the screen, record screen silent then dub voice in iMovie / DaVinci.
+  The latter handles voiceover better.
+- **Cuts:** keep them at the natural pause between scenes (after
+  `coat init` finishes, before `coat agent onboard`, etc.). Don't cut
+  inside a panel.
