@@ -62,7 +62,11 @@ For each item in the bundle:
    If the item is fragile and the bundle has a learned_routing pattern,
    surface it explicitly.
 2. Estimate demand for the window using
-   `out_avg_per_day * window_days * (weather_demand_modifier or 1.0)`.
+   `out_avg_per_day * window_days * (weather_demand_modifier or 1.0)
+   * risk_amp`, where `risk_amp` reflects supply_chain_risk_band:
+       high   → 1.40   (panic-buy / safety stock bump)
+       medium → 1.15
+       low / none → 1.00
    Express uncertainty as ±15% if movement_count < 6, else ±10%.
 3. Compute stockout_risk:
    - HIGH if available < projected demand
@@ -150,7 +154,9 @@ def _scripted_reasoning(bundle: dict[str, Any], window_days: int) -> str:
         out_per_day = float(movement.get("out_avg_per_day") or 0.0)
         ext = it.get("external_signals") or {}
         wmod = float(ext.get("weather_demand_modifier") or 1.0)
-        proj = round(out_per_day * window_days * wmod, 0)
+        risk_band = (ext.get("supply_chain_risk_band") or "").lower()
+        risk_amp = {"high": 1.40, "medium": 1.15, "low": 1.0}.get(risk_band, 1.0)
+        proj = round(out_per_day * window_days * wmod * risk_amp, 0)
 
         unc_pct = 15 if movement.get("movement_count", 0) < 6 else 10
         unc = round(proj * unc_pct / 100, 0)

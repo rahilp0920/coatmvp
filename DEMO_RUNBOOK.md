@@ -447,6 +447,65 @@ the calm baseline that makes the HIGHs visible.
 
 ---
 
+## Scene 5b — Real-time context update (the "living layer" beat) — ~30s
+
+This is the beat that proves Coat is ambient and reactive, not a
+snapshot. **Insert it between Atlas's first run and the inline-ratify
+denial moment.**
+
+**Work pane:**
+
+```bash
+coat sim news --sku SKU-441 \
+  --summary "Texas chip plant fire — additional 25% supply hit, 4-week recovery" \
+  --risk high --score 0.85 --horizon 30
+```
+
+**Watch pane (already running) lights up** with an
+`external_signal_ingest` row — the news event is now in Coat's
+context, time-stamped and provenanced.
+
+**Then re-run Atlas:**
+
+```bash
+atlas --scripted
+```
+
+(or `atlas` with your provider key — the live-mode path is identical.)
+
+**On screen:** the same forecast table, but SKU-441's row shifts —
+projected demand jumps, reorder qty grows, confidence drops (the
+high-risk-band penalty). The reasoning notes now cite both the
+existing Suzhou advisory AND the new Texas chip plant fire. The
+`context_origin` panel cites the same sources — Coat composed the
+new signal into the bundle without any code change.
+
+| | before news | after news |
+|---|---|---|
+| projected demand | ~206 ± 21 | ~251 ± 25 |
+| reorder qty | 168 | 227 |
+| confidence | 0.85 | 0.75 |
+
+**Voice:** *"Watch what happens when the world changes. A piece of
+shipping news lands. Coat takes it in. Atlas didn't restart. Atlas
+wasn't re-deployed. The next call to the bundle reflects the new
+state. The agent reasoned over a different reality. Same contract,
+same scopes — fresh context. That's the difference between an LLM
+bolted on the side and a layer that lives in your workflow."*
+
+**Infrastructure status:** ✓ shipped — `cli/coat_sim.py` (`news` and
+`feedback` subcommands), bundle assembler MAX-aggregates risk across
+signals, Atlas's reasoning amplifies projected demand by `risk_band`
+(high=1.40x, medium=1.15x).
+
+**For the recording, the `coat sim feedback` variant** is also worth
+a tiny B-roll if you have time — it shows the *human* side of real-
+time updates: an operator submits a correction, the learner re-mines,
+and the next routing call honors the new pattern. Same architectural
+beat, different surface.
+
+---
+
 ## Scene 6 — Full circle, audit chain, the thesis — ~25s
 
 **Work pane:**
@@ -510,6 +569,7 @@ rails do."*
 | 12 | `coat audit --entity` entity timeline + capability provenance | 6 | ✓ shipped | `cli/coat_audit.py` |
 | 13 | `coat` console-script entry point (after `pip install -e .`) | all | ✓ shipped | `pyproject.toml` |
 | 14 | Demo seed overrides for visible risk-band spread (SKU-441 / SKU-200 → HIGH) | 5 | ✓ shipped | `mock_erp/seed.py` |
+| 15 | `coat sim news` + `coat sim feedback` — real-time context injection for the "living layer" beat | 5b | ✓ shipped | `cli/coat_sim.py`, bundle MAX-risk aggregation, Atlas risk-band amplification |
 
 Six things deliberately *cut* from the build:
 
@@ -571,10 +631,19 @@ coat agent onboard
 # → describe the agent (paste from README or type)
 # → ratify with `r`
 
-# Scene 5 — Atlas reasons + mid-flight ratification (75s)
+# Scene 5a — Atlas reasons (35s)
 atlas "what's our stockout risk for next week, and what should we reorder?"
 # → forecast table with SKU-441 HIGH and SKU-200 HIGH
 
+# Scene 5b — Real-time context update (30s)
+coat sim news --sku SKU-441 \
+  --summary "Texas chip plant fire — additional 25% supply hit, 4-week recovery" \
+  --risk high --score 0.85 --horizon 30
+atlas
+# → same agent, same scopes — but the forecast shifted because Coat
+#   ingested the news. SKU-441 reorder grows; confidence drops.
+
+# Scene 5c — Mid-flight ratification (40s)
 atlas --demo-denial
 # → scope-expansion request panel renders
 # → type `y` to ratify

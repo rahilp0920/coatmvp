@@ -151,12 +151,30 @@ def _learned_routing_for_item(conn: sqlite3.Connection, sku: str, fragile: bool)
     return f"{key}: prefer {wh} (support={support}, confidence={conf:.2f})"
 
 
+_RISK_RANK = {"low": 1, "medium": 2, "high": 3}
+
+
+def _bump_risk(out: dict[str, Any], band: str | None, score: float | None) -> None:
+    """MAX-aggregate risk band/score across multiple signals so a new
+    high-severity event always wins over a stale low-severity one."""
+    if band:
+        existing = (out.get("supply_chain_risk_band") or "").lower()
+        if _RISK_RANK.get(band.lower(), 0) > _RISK_RANK.get(existing, 0):
+            out["supply_chain_risk_band"] = band.lower()
+    if score is not None:
+        out["supply_chain_risk_score"] = max(
+            float(out.get("supply_chain_risk_score") or 0.0),
+            float(score),
+        )
+
+
 def _external_signals_for_item(conn: sqlite3.Connection, sku: str, warehouses: list[str]) -> dict[str, Any]:
     """Aggregate every relevant external signal into a compact payload.
 
     Joins on (ENTITY_KIND='item', ENTITY_KEY=sku) plus
     (ENTITY_KIND='warehouse', ENTITY_KEY in warehouses), filtering out
-    expired signals.
+    expired signals. Risk band/score are MAX-aggregated across signals
+    so a fresh HIGH-risk event dominates a stale LOW-risk one.
     """
     out: dict[str, Any] = {}
     sources_used: list[str] = []
@@ -172,8 +190,7 @@ def _external_signals_for_item(conn: sqlite3.Connection, sku: str, warehouses: l
     ).fetchall():
         payload = json.loads(r["PAYLOAD_JSON"])
         if r["SOURCE"] == "shipping_news":
-            out["supply_chain_risk_band"] = payload.get("risk_band")
-            out["supply_chain_risk_score"] = payload.get("risk_score")
+            _bump_risk(out, payload.get("risk_band"), payload.get("risk_score"))
             out.setdefault("news_summary", []).append(payload.get("summary"))
         sources_used.append(r["SOURCE"])
 
@@ -200,6 +217,7 @@ def _external_signals_for_item(conn: sqlite3.Connection, sku: str, warehouses: l
                             f"{wh}: {payload.get('summary')}"
                         )
                 if r["SOURCE"] == "shipping_news":
+                    _bump_risk(out, payload.get("risk_band"), payload.get("risk_score"))
                     out.setdefault("news_summary", []).append(
                         f"{wh}: {payload.get('summary')}"
                     )
