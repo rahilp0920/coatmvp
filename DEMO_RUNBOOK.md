@@ -11,6 +11,17 @@ minutes.
 The whole thing runs in VS Code with Claude Code open and the project
 loaded. Split-pane: editor left, terminal right.
 
+## Philosophy on screen
+
+**As easy as wearing a coat.** The admin never types a scope string.
+They describe the agent's job in plain English. Coat infers what the
+agent needs to read, write, and act on — and surfaces a proposal for
+human ratification. Permissions are *derived*, not declared. Agents
+don't ask for capabilities — Coat figures out what they need and the
+human signs off.
+
+This is what the recording has to feel like, scene by scene.
+
 ---
 
 ## Scene 1 — Configure Coat into the workflow (employee perspective) — ~45s
@@ -132,110 +143,199 @@ your data.' We see what the ERP already emits."*
 
 ---
 
-## Scene 4 — External agent predicts inventory under explicit permissions — ~75s
+## Scene 4 — Onboard a specialized external agent in plain English — ~75s
 
-**On screen:** Claude Code in the editor pane. A new file opens —
-`agents/forecast_inventory.py`. The script declares its identity and
-requested scopes via Coat's MCP, gets a session, and runs.
-
-```python
-# Forecasting agent — predicts next-week stockouts
-# Uses external weather + sales-trend data + Coat's stock + movement history
-# Requested scopes: coat:concepts:read, coat:inventory:read, coat:patterns:read
-```
-
-Run it. Coat's handshake response prints (granted scope set, restricted
-tool catalog, audit_id), then the agent fetches `get_stock` for the
-top-10 SKUs, fetches `MSEG` movement history through Coat's adapter,
-joins synthetic external data (a CSV of weather + sales-trend), and
-predicts:
+**On screen:** terminal. The admin runs:
 
 ```
-INVENTORY FORECAST — week of 2026-05-10
-SKU       wh    on_hand  predicted_demand  stockout_risk
-SKU-441   WH01   180     ~210              HIGH      ← reorder ≥30 by Friday
-SKU-200   WH02    95     ~110              MEDIUM
-SKU-300   WH02   240     ~180              LOW
-…
-
-Note: forecasting agent has NO access to invoice posting (coat:invoice:* not granted).
-      Tried to call post_invoice for replenishment PO — denied at protocol layer.
+$ coat agent onboard
 ```
 
-The "denied" line is the money shot. The same agent that just produced
-a useful forecast cannot post a transaction it wasn't authorized for.
-The protocol enforced that the moment the agent connected.
+Coat asks one question: *"What does this agent do? Describe it like
+you'd describe it to a new hire."*
 
-**Voice:** *"Now plug in an external agent. It's a forecaster. It
-needs Coat's inventory data plus things Coat doesn't have — weather,
-external sales trends. The incumbents won't let you bring in
-external context like this. Their AI is filtered by their access
-controls and locked to their data. Ours plugs into Coat over MCP.
-And — watch — when this agent tries to post an invoice for the
-reorder, it's denied at the protocol layer because its scopes don't
-include `coat:invoice:post`. Permissions are enforced at handshake,
-not vibes."*
+The admin types:
+
+> *"Atlas — an inventory planning specialist. It looks at our stock,
+> recent movements, and outside data like weather and shipping
+> disruptions to predict next week's stockout risk per SKU and
+> recommend reorder quantities. It needs to read inventory and
+> movements; it doesn't post anything to the ERP itself."*
+
+Coat thinks for a beat, then surfaces the proposal:
+
+```
+PROPOSED AGENT — atlas@coat.io/v1                            (provider: o3 / Gemini 2.5)
+
+Description
+  Specialized inventory-planning agent. Reads stock + movement history;
+  joins external context; outputs reorder recommendations. Does not
+  write to the ERP.
+
+Inferred scopes (least privilege)
+  ✓ coat:concepts:read         — needs to know the shape of this ERP
+  ✓ coat:inventory:read        — get_stock, suggest_source_warehouse (read-only)
+  ✓ coat:patterns:read         — surface routing patterns to inform recommendations
+  ✗ coat:inventory:write       — NOT granted (description says "doesn't post anything")
+  ✗ coat:invoice:*             — NOT granted (out of role)
+
+Mode
+  trial (advisory only) for first 50 calls or 7 days, whichever comes first
+  promotion to enforced requires re-ratification
+
+External data sources the agent declared it will use
+  • weather/precipitation data (Open-Meteo)
+  • shipping-disruption news (RSS, hashed for audit)
+
+  [r]atify   [e]dit scopes   [c]ancel
+```
+
+The admin presses `r`. Coat writes the agent manifest, registers the
+key, opens a trial session, and prints:
+
+```
+✓ atlas@coat.io/v1 onboarded.  audit_id=aud_01HV3R…
+  trial budget:  50 calls / 7d
+  next ratification due:  after 50th call OR Friday May 10
+```
+
+**Voice:** *"This is the onboarding. The admin doesn't think about
+permissions. They describe the agent like they'd describe a new
+hire. Coat reads the description, infers what the agent needs to
+read, write, and act on — and proposes the smallest scope set that
+covers it. The human signs off. The agent is live in trial mode.
+That's the whole onboarding. As easy as wearing a coat."*
 
 **Infrastructure required:**
-- `agents/forecast_inventory.py` — the forecasting agent script.
-  *To build — ~150 lines (uses adapter directly + a synthetic external
-  data CSV).*
-- Stub of the agent protocol's handshake output: when an agent
-  connects, the adapter emits a "session opened" line with granted
-  scopes and the restricted tool catalog. Full crypto handshake not
-  required for the demo — the *visibility* of granted scopes is what
-  lands. *To build — ~50 lines extension to `mcp_server/server.py`.*
-- An explicit `cap.denied` path in tool dispatch when an agent calls
-  a tool outside its granted scope. *To build — ~30 lines.*
-- A small synthetic external-data CSV — `data/external/weather_sales.csv`. *To build — trivial.*
+- `coat agent onboard` CLI: prompts for description, asks Claude to
+  parse it into a manifest (description → tasks → required tools →
+  scope set), renders the proposal with explicit "granted" and
+  "denied" lines, persists on ratify. *To build — ~140 lines.*
+- Manifest derivation logic on the adapter side: a small function
+  that takes a description + Coat's tool catalog and returns the
+  minimal scope set. Uses Claude with a tight system prompt; falls
+  back to a curated keyword-to-scope mapping if offline. *To build —
+  ~80 lines.*
+- "Trial mode" in the existing capability lifecycle from
+  `OBSERVABILITY.md` — already specified, just needs the budget +
+  expiry plumbing. *To build — ~40 lines.*
+- Agent registry table — single `AGENTS` table with id, manifest,
+  pubkey_path (placeholder ok for the demo), trial_budget, next_review.
+  *To build — schema + 30 lines.*
 
 ---
 
-## Scene 5 — Permissions, security, and the path to compliance — ~30s
+## Scene 5 — Ask Atlas a real question; mid-flight permission expansion — ~75s
 
-**On screen:** `coat audit --entity SKU-441 --since 1h`. The terminal
-prints a clean entity timeline showing every event: who did what,
-under what capability, derived from which pattern, ratified by whom:
+**On screen:** Claude Code in the editor pane (or a terminal chat —
+either works). The admin types:
+
+> *"Atlas, what's our stockout risk for next week, and what should
+> we reorder?"*
+
+Atlas thinks. Tool calls stream in real time — `list_concepts`,
+`get_stock` for the top SKUs, `suggest_source_warehouse` for routing
+context, `list_patterns(kind=ROUTING)` for learned constraints. Each
+call shows the granted scope it ran under. Then the answer:
 
 ```
-ENTITY TIMELINE — item / SKU-441
-14:11:42 obs.read         get_stock           agent=forecast@coat.io/v1
-                                              scope=coat:inventory:read
-                                              audit_id=aud_01HV3M…
-14:12:01 obs.write        move_stock 80 WH02→WH01
-                                              actor=u_clerk_b (via SAP rails)
-                                              capability_origin=cdc (human action)
-14:12:03 cap.denied       post_invoice        agent=forecast@coat.io/v1
-                                              reason="scope coat:invoice:post not granted"
-                                              audit_id=aud_01HV3M…
+INVENTORY OUTLOOK — week of 2026-05-10  (Atlas, trial mode, 7/50 calls)
+
+SKU       wh    on_hand  proj_demand    stockout_risk    reorder_qty   confidence
+SKU-441   WH01   180     ~210±18        HIGH             ≥30 by Fri    0.84
+SKU-200   WH02    95     ~110±14        MEDIUM           ≥20 by Mon    0.71
+SKU-300   WH02   240     ~180±22        LOW              none          0.79
+
+Reasoning notes:
+  • SKU-441 trending up due to seasonal HVAC demand (Open-Meteo: heat dome 5/9–5/12)
+  • SKU-200 affected by upstream shipping delay (RSS: Port of Long Beach 5/3 advisory)
+  • SKU-300 stable; consistent with last 3 quarters
+
+Recommended action: place reorder for SKU-441 (30 units) and SKU-200 (20 units).
 ```
 
-**Voice:** *"Every action chains back through the capability that
-authorized it, the pattern that derived the capability, the
-observations that backed the pattern, the human who ratified it.
-Provenance is everything. This is the audit chain a finance auditor
-or a security reviewer needs. SOC 2 next quarter, GDPR DPA on day
-one, SOX-aware controls in the architecture from the start. The
-detailed roadmap is in COMPLIANCE.md."*
+The admin replies:
+
+> *"Go ahead and stage the reorder PO for SKU-441."*
+
+Atlas tries to call `create_purchase_order`. Coat returns:
+
+```
+cap.denied  create_purchase_order  agent=atlas@coat.io/v1
+            reason: scope coat:procurement:write not granted
+            this scope was NOT in the original manifest
+
+Coat surfaces the request to admin:
+  Atlas is asking for a new capability:
+    coat:procurement:write@vendor=*,max_amount=$5,000
+  Atlas's current task argues for granting this — review?  [y/n]
+```
+
+The admin presses `y`. Coat updates the manifest, the trial budget
+expands by one scope, the call retries, the PO is staged. Audit
+trail captures the whole arc.
+
+**Voice:** *"Atlas runs under the scopes Coat inferred. Read-only,
+trial mode. Real reasoning, real external data, real ERP context —
+things the incumbents' AI can't see because it's filtered by their
+access controls. When Atlas hits the edge of its granted scope, it
+doesn't fail silently. Coat surfaces the gap to the admin in
+plain English: 'Atlas is asking for this capability. Want to grant
+it?' Mid-flight ratification. Audit chain captures the entire arc —
+who asked for what, when, why, and what they got back. SOC 2,
+GDPR, SOX-aware from day one. Full compliance roadmap in
+COMPLIANCE.md."*
 
 **Infrastructure required:**
-- `coat audit --entity X --since T` CLI. *To build — ~80 lines, queries `WORKFLOW_OBS`.*
-- `COMPLIANCE.md` for the verbal claim to point at. *Written in this push.*
+- Atlas as a configured agent backed by a non-Claude reasoning model
+  (e.g., `openai/o3` or `google/gemini-2.5-pro` via their respective
+  SDKs) — demonstrates Coat is provider-agnostic. *To build — ~180
+  lines: client wrapper + system prompt + tool-call loop.*
+- Synthetic external data: `data/external/weather.csv` and
+  `data/external/shipping_disruptions.csv`. *To build — trivial.*
+- `cap.denied` path on tool dispatch + "scope expansion request"
+  surface that posts to the admin and waits for ratify. *To build —
+  ~120 lines.*
+- `coat audit --entity X --since T` CLI for the next scene. *To
+  build — ~80 lines.*
+- `COMPLIANCE.md` for the verbal claim. *Already in repo.*
 
 ---
 
-## Scene 6 — Full circle — ~20s
+## Scene 6 — Full circle, audit chain, the thesis — ~25s
 
-**On screen:** the pattern catalog from scene 2 again. The new
-`vendor_fast_track` pattern from scene 3 is now at status `trial` →
-ready for ratification.
+**On screen:** `coat audit --entity SKU-441 --since 1h` — the entity
+timeline that ties the whole story together:
 
-**Voice:** *"One employee posted one invoice. Coat saw it on the
-change boundary. Mined a candidate pattern. Surfaced it for
-ratification. An external agent ran an action on the same data,
-under a different capability, denied where appropriate, audited end
-to end. Same Coat layer. Different agents. Different ERPs tomorrow.
-Walls don't matter."*
+```
+ENTITY TIMELINE — item / SKU-441   (last hour)
+
+14:12:01  cdc.event       move_stock 80 WH02→WH01
+                          actor=u_clerk_b (SAP rails, human)
+                          capability_origin=cdc.human_action
+14:14:32  obs.read        get_stock
+                          agent=atlas@coat.io/v1   scope=coat:inventory:read
+                          capability_origin=manifest (inferred from description)
+14:14:34  obs.read        suggest_source_warehouse
+                          agent=atlas@coat.io/v1   scope=coat:inventory:read
+14:15:01  cap.denied      create_purchase_order    agent=atlas@coat.io/v1
+                          reason: coat:procurement:write not granted
+14:15:18  cap.granted     coat:procurement:write@vendor=*,max=5000
+                          ratified by u_mgr_c   reason: "approved for Atlas trial"
+14:15:19  obs.write       create_purchase_order  PO-2026-0014
+                          agent=atlas@coat.io/v1   scope=coat:procurement:write
+                          capability_origin=ratification_aud_01HV3T…
+```
+
+**Voice:** *"Watch the chain. A human moved stock through SAP. Coat
+saw it on the change boundary. An external agent — built on a
+different model, configured by description, not by manifest — ran
+under the scopes we inferred. Hit the edge of its permissions. The
+admin granted one new capability in one click. Every step has a
+reason, every reason has a human signature, every signature has a
+timestamp. This is what 'AI-native ERP' actually means. Walls don't
+matter. The agent doesn't matter. The model doesn't matter. The
+rails do."*
 
 **Infrastructure required:**
 - Pattern catalog renderer (already in scene 2). *Reuse.*
@@ -255,11 +355,15 @@ Sized rough.
 | 4 | `sap_rails/` direct-write SAP simulator | 3 | ~120 lines |
 | 5 | SQLite triggers / bridge watcher emitting CDC into `WORKFLOW_OBS` | 3 | ~60 lines |
 | 6 | `coat watch` live-stream CLI | 3, 6 | ~80 lines |
-| 7 | `agents/forecast_inventory.py` + synthetic external CSV | 4 | ~150 lines + data |
-| 8 | Visible-handshake + `cap.denied` in `mcp_server/server.py` | 4, 5 | ~80 lines |
-| 9 | `coat audit --entity` CLI | 5 | ~80 lines |
+| 7 | `coat agent onboard` CLI — natural-language → manifest derivation, ratification UX | 4 | ~140 lines |
+| 8 | Manifest derivation logic — Claude-powered scope inference + curated fallback | 4 | ~80 lines |
+| 9 | `AGENTS` table + trial-mode budget plumbing | 4, 5 | ~70 lines |
+| 10 | Atlas — non-Claude reasoning model wrapper (o3 / Gemini) + system prompt + tool loop | 5 | ~180 lines |
+| 11 | Synthetic external data CSVs (weather + shipping disruptions) | 5 | trivial |
+| 12 | `cap.denied` path + "scope expansion request" inline-ratification surface | 5 | ~120 lines |
+| 13 | `coat audit --entity` CLI | 6 | ~80 lines |
 
-Total: roughly 700 lines of new code, plus a small CSV fixture. All
+Total: roughly 1,100 lines of new code, plus two CSV fixtures. All
 additive, none of it requires changes to the core adapter or
 discovery beyond the confidence-scoring extension.
 
@@ -284,10 +388,14 @@ Built today (works in your repo right now):
 Not yet built (the list above):
 - Confidence scoring on the concept map
 - SAP-rails simulator + CDC bridge
-- External forecasting agent
-- Visible handshake + `cap.denied`
+- `coat agent onboard` CLI + manifest derivation
+- Atlas (specialized non-Claude inventory agent)
+- `cap.denied` + scope-expansion ratification surface
 - `coat init`, `coat watch`, `coat audit` CLIs
 
 Next move: greenlight the build, pick scene-1-and-2 as the first
-slice (confidence-scored context map), and ship that today. Scene 3
-and 4 come tomorrow. Recording on day three.
+slice (confidence-scored context map), and ship that today.
+Scene 4 (the "as easy as wearing a coat" onboarding) is the
+second slice — it's the one that lands the philosophy on screen.
+Scene 5 (Atlas + mid-flight ratification) is the third. Recording
+on day three or four.

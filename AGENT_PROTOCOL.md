@@ -42,6 +42,21 @@ capabilities, handshake, enforcement.**
 ## Identity
 
 Every agent that talks to Coat has a stable, registered identity.
+
+The protocol's primary UX is **inferred-scope onboarding** — the admin
+describes the agent's job in plain English, Coat derives the manifest,
+the human ratifies. This is the "as easy as wearing a coat" path and
+is the default for first-party plugins, in-house agents, and recorded
+demos.
+
+Explicit-manifest registration (the schema below) still exists for
+production-grade plugins authored by a third party who needs the
+contract to be a static artifact. Both paths land at the same
+`manifest.yaml`; the difference is who wrote it.
+
+The inferred-scope path is documented in §"Manifest derivation"
+below. The schema and handshake apply to both paths identically.
+
 Registration produces:
 
 - An `agent_id` — opaque to the agent, the canonical handle inside
@@ -86,6 +101,111 @@ duration:
 ```
 
 Coat persists the manifest. Granting it is a separate step.
+
+---
+
+## Manifest derivation — how scopes are inferred from a description
+
+The protocol's primary onboarding UX is a single command:
+
+```
+$ coat agent onboard
+What does this agent do? Describe it like you'd describe it to a new hire.
+
+> Atlas — an inventory planning specialist. Looks at our stock,
+> recent movements, and outside data like weather and shipping
+> disruptions to predict next week's stockout risk per SKU and
+> recommend reorder quantities. It needs to read inventory and
+> movements; it doesn't post anything to the ERP itself.
+
+PROPOSED AGENT — atlas@coat.io/v1
+Inferred scopes (least privilege):
+  ✓ coat:concepts:read
+  ✓ coat:inventory:read
+  ✓ coat:patterns:read
+  ✗ coat:inventory:write    NOT granted (description: "doesn't post anything")
+  ✗ coat:invoice:*          NOT granted (out of role)
+Mode: trial — 50 calls or 7 days, whichever first
+  [r]atify   [e]dit   [c]ancel
+```
+
+The admin never types a scope string. The cognitive load is the
+description — same load as briefing a new hire. The mechanics are
+Coat's job.
+
+### How the inference works
+
+Three stages, in order, with each stage's output gating the next:
+
+**Stage 1 — Task extraction.** A small Claude call takes the
+description and Coat's full tool catalog (with descriptions) and
+returns: a list of high-level tasks the agent will perform; the
+data classes it needs to read and write; an explicit list of things
+the description says it will *not* do. Output is structured JSON,
+not free text.
+
+**Stage 2 — Scope projection.** A deterministic mapper takes the
+task list and projects it onto the scope grammar. `(read inventory
+data) → coat:inventory:read`. `(reads vendor records, US-only) →
+coat:vendor:read@country=US`. The mapper is rule-based and auditable;
+no LLM in this step. The "NOT granted" lines are explicit — every
+verb the description ruled out is listed with the reason.
+
+**Stage 3 — Ratification.** The admin sees the proposal in
+plain English next to the formal scope strings, presses one key,
+and the agent is registered with that manifest. Trial mode is on
+by default; promotion to enforced requires re-ratification after
+the trial budget is consumed.
+
+### Why this is safe
+
+Three properties make inferred-scope onboarding *more* secure than
+manual scope authoring, not less.
+
+- **Least privilege by construction.** The description names what
+  the agent will do. Anything not in the description is denied. The
+  mapper does not invent capabilities. There is no "or maybe also
+  this one, just in case."
+- **Explicit denial list.** Every common adjacent capability the
+  agent could reasonably want is enumerated and explicitly denied —
+  not just absent. The admin sees the negative space.
+- **Trial mode is the default.** No inferred manifest enforces a
+  high-stakes capability on day one. The agent runs advisory-only
+  for a budgeted period; usage data feeds the next ratification
+  decision.
+- **Mid-flight ratification, not silent escalation.** When an agent
+  hits the edge of its granted scope at runtime, the protocol does
+  not fail silently and it does not auto-grant. It surfaces a
+  request to the admin: *"Atlas is asking for capability X. Approve?"*
+  One human decision per scope expansion. Audited end to end.
+
+### Fallback when offline
+
+If Claude is unreachable during stage 1, Coat falls back to a
+curated keyword-to-scope mapping (e.g., "inventory" → inventory:read,
+"post invoice" → invoice:post, "approve" → invoice:approve). The
+fallback errs on the side of denying — when the keyword mapping is
+ambiguous, the scope is left unrequested and the admin is prompted
+to add it manually. This guarantees `coat agent onboard` always
+completes, even in air-gapped environments, without ever
+over-granting.
+
+### When to use explicit-manifest registration instead
+
+The inferred path is right for ~90% of agents. Use the explicit
+schema (§Identity above) when:
+
+- The agent is authored by a third-party vendor and the manifest is
+  contractual — must be reviewable as a static artifact in the
+  vendor's repo.
+- The agent's capability set is unusually narrow or unusual (a
+  break-glass emergency agent that only fires on incident; a
+  dry-run audit agent with read-only access to specific entities).
+- Policy requires a signed manifest reviewed by a security
+  committee before any registration.
+
+Both paths land at the same `manifest.yaml` schema and the same
+handshake protocol. The difference is who authored the file.
 
 ---
 
