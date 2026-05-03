@@ -37,11 +37,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from rich.console import Console  # noqa: E402
 from rich.panel import Panel  # noqa: E402
 from rich.table import Table  # noqa: E402
+from rich.text import Text  # noqa: E402
 
 from agents.provider import detect_provider, make_provider  # noqa: E402
 from mcp_server.bundles import inventory as inventory_bundle  # noqa: E402
+from mcp_server import adapter as primitives_adapter  # noqa: E402
+from mcp_server.dispatch import dispatch as scoped_dispatch  # noqa: E402
 
 console = Console()
+
+DEFAULT_AGENT_ID = "atlas@coat.io/v1"
 
 
 SYSTEM_PROMPT = """You are Atlas, a specialized inventory planning agent.
@@ -101,11 +106,30 @@ ATLAS_TOOLS = [
     },
 ]
 
+# Tool implementations Atlas could invoke. Scope checking decides whether
+# each call actually runs — see `_make_dispatch_for_agent`.
+_TOOL_IMPLS: dict[str, Any] = {
+    "get_inventory_context": inventory_bundle.get_inventory_context,
+    "move_stock":             primitives_adapter.move_stock,
+    "post_invoice":           primitives_adapter.post_invoice,
+}
 
-def _dispatch(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
-    if tool_name == "get_inventory_context":
-        return inventory_bundle.get_inventory_context(**args)
-    return {"error": f"unknown tool {tool_name!r}"}
+
+def _make_dispatch_for_agent(agent_id: str):
+    """Build the dispatch closure used by the LLM tool-use loop.
+
+    Every tool call routes through scope-aware `scoped_dispatch`. Calls
+    outside the agent's granted scopes return a structured cap.denied
+    payload — the LLM sees it in the tool result and is expected to
+    surface the denial to the user in plain English."""
+
+    def _dispatch(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+        impl = _TOOL_IMPLS.get(tool_name)
+        if impl is None:
+            return {"error": f"unknown tool {tool_name!r}"}
+        return scoped_dispatch(agent_id, tool_name, args, impl)
+
+    return _dispatch
 
 
 # ---------------------------------------------------------------------------
@@ -238,20 +262,47 @@ def _format_output(rows: list[dict[str, Any]], bundle: dict[str, Any], window_da
 # Main entry
 # ---------------------------------------------------------------------------
 
-def run(question: str, window_days: int = 7, top_n: int = 10, scripted: bool = False) -> None:
+def run(
+    question: str,
+    window_days: int = 7,
+    top_n: int = 10,
+    scripted: bool = False,
+    agent_id: str = DEFAULT_AGENT_ID,
+) -> None:
     """Run Atlas. Prints the recommendation."""
     provider_choice = None if scripted else detect_provider()
 
     if provider_choice is None or scripted:
-        # Offline / no provider — call the bundle directly and reason
-        # deterministically over it.
-        bundle = inventory_bundle.get_inventory_context(
-            window_days=window_days, top_n=top_n
+        # Offline / no provider — call the bundle directly through the
+        # scope-aware dispatcher so the trial-budget counter and audit
+        # rows still land. Reasoning is deterministic.
+        bundle = scoped_dispatch(
+            agent_id, "get_inventory_context", {
+                "window_days": window_days, "top_n": top_n,
+            }, inventory_bundle.get_inventory_context,
         )
+        if isinstance(bundle, dict) and bundle.get("error") == "cap.denied":
+            console.print(
+                Panel.fit(
+                    Text.assemble(
+                        Text("cap.denied  ", style="bold red"),
+                        Text("get_inventory_context  ", style="bold"),
+                        Text(f"agent={agent_id}\n", style="dim"),
+                        Text(f"missing: {bundle.get('missing_scope')}\n", style="default"),
+                        Text(f"reason : {bundle.get('reason')}\n", style="default"),
+                        Text(f"advise : {bundle.get('advise')}", style="dim"),
+                    ),
+                    border_style="red",
+                )
+            )
+            return
+
         console.print(
             Panel.fit(
-                f"[bold]atlas[/bold] (scripted — no LLM provider available)\n"
-                f"[dim]tool call → get_inventory_context(window_days={window_days}, top_n={top_n})[/dim]",
+                f"[bold]atlas[/bold] (scripted — no LLM provider available)  "
+                f"agent_id={agent_id}\n"
+                f"[dim]tool call → get_inventory_context(window_days={window_days}, top_n={top_n})  "
+                f"audit_id={bundle.get('_audit', {}).get('audit_id', '?')}[/dim]",
                 border_style="cyan",
             )
         )
@@ -261,20 +312,76 @@ def run(question: str, window_days: int = 7, top_n: int = 10, scripted: bool = F
     provider = make_provider(provider_choice)
     console.print(
         Panel.fit(
-            f"[bold]atlas[/bold] (provider: {provider_choice.name} • model: {provider_choice.model})\n"
+            f"[bold]atlas[/bold] (provider: {provider_choice.name} • model: {provider_choice.model})  "
+            f"agent_id={agent_id}\n"
             f"[dim]Same MCP surface. Different brain. Same answer shape.[/dim]",
             border_style="cyan",
         )
     )
 
     # The agent literally only knows about one tool — that's the contract.
+    dispatch_fn = _make_dispatch_for_agent(agent_id)
     final = provider.tool_use_loop(
         system_prompt=SYSTEM_PROMPT,
         user_message=question,
         tools=ATLAS_TOOLS,
-        dispatch=_dispatch,
+        dispatch=dispatch_fn,
     )
     console.print(final)
+
+
+def demo_denial(agent_id: str = DEFAULT_AGENT_ID) -> None:
+    """Have Atlas try a write operation it isn't authorized for.
+
+    Used in scene 5 of the demo runbook: Atlas attempts to rebalance
+    stock via `move_stock`, the protocol denies it because the agent's
+    manifest doesn't include `coat:inventory:write`, and the admin sees
+    a clean cap.denied payload with the exact `coat agent grant` command
+    that would unlock it.
+    """
+    console.print(
+        Panel.fit(
+            f"[bold]atlas[/bold] demo: out-of-scope write attempt  "
+            f"agent_id={agent_id}\n"
+            f"[dim]Atlas tries `move_stock` to rebalance stock — outside its "
+            f"manifest, which only granted read scopes.[/dim]",
+            border_style="cyan",
+        )
+    )
+
+    result = scoped_dispatch(
+        agent_id,
+        "move_stock",
+        {"matnr": "SKU-441", "qty": 30, "from_warehouse": "WH02",
+         "to_warehouse": "WH01", "reason": "atlas demo: rebalance"},
+        primitives_adapter.move_stock,
+    )
+
+    if isinstance(result, dict) and result.get("error") == "cap.denied":
+        console.print(
+            Panel.fit(
+                Text.assemble(
+                    Text("cap.denied  ", style="bold red"),
+                    Text("move_stock  ", style="bold"),
+                    Text(f"agent={agent_id}\n", style="dim"),
+                    Text(f"missing: ", style="default"),
+                    Text(result.get("missing_scope") or "?", style="bold cyan"),
+                    Text(f"\nreason : {result.get('reason')}\n", style="default"),
+                    Text(f"audit_id: {result.get('audit_id')}\n", style="dim"),
+                    Text("\nadmin next step:\n", style="default"),
+                    Text(f"  $ python -m cli.coat agent grant {agent_id} "
+                         f"{result.get('missing_scope')} --reason 'atlas demo'",
+                         style="bold yellow"),
+                ),
+                title="scope-expansion request",
+                border_style="red",
+            )
+        )
+    else:
+        console.print(
+            f"[yellow]Atlas was actually allowed to call move_stock — manifest "
+            f"may have been expanded already. Result: {result}[/yellow]"
+        )
 
 
 def main() -> None:
@@ -291,8 +398,30 @@ def main() -> None:
         action="store_true",
         help="force scripted (offline) mode — bypass any LLM provider",
     )
+    parser.add_argument(
+        "--agent-id",
+        default=DEFAULT_AGENT_ID,
+        help=f"agent identity to run as (default {DEFAULT_AGENT_ID})",
+    )
+    parser.add_argument(
+        "--demo-denial",
+        action="store_true",
+        help=(
+            "demo scene 5 cap.denied path: Atlas tries to call move_stock "
+            "(out-of-scope) and surfaces the scope-expansion request"
+        ),
+    )
     args = parser.parse_args()
-    run(args.question, window_days=args.window, top_n=args.top_n, scripted=args.scripted)
+    if args.demo_denial:
+        demo_denial(agent_id=args.agent_id)
+        return
+    run(
+        args.question,
+        window_days=args.window,
+        top_n=args.top_n,
+        scripted=args.scripted,
+        agent_id=args.agent_id,
+    )
 
 
 if __name__ == "__main__":

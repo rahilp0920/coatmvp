@@ -20,7 +20,7 @@ from pathlib import Path
 # Make sibling modules importable when run as `python -m cli.coat`
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cli import agent_onboard, agent_list  # noqa: E402
+from cli import agent_onboard, agent_list, agent_grant, coat_audit  # noqa: E402
 
 
 def main() -> None:
@@ -67,6 +67,33 @@ def main() -> None:
     revoke.add_argument("agent_id")
     revoke.add_argument("--reason", default="manual revoke")
 
+    grant = agent_sub.add_parser(
+        "grant",
+        help="grant an additional scope to a registered agent (audited)",
+    )
+    grant.add_argument("agent_id")
+    grant.add_argument("scope")
+    grant.add_argument("--by", dest="granted_by", default="u_mgr_c",
+                       help="granter user_id (recorded on the audit row)")
+    grant.add_argument("--reason", default=None)
+    grant.add_argument("--auto-yes", action="store_true",
+                       help="skip the interactive ratification prompt")
+
+    revoke_scope = agent_sub.add_parser(
+        "revoke-scope",
+        help="revoke a single scope from an agent (the agent itself stays active)",
+    )
+    revoke_scope.add_argument("agent_id")
+    revoke_scope.add_argument("scope")
+    revoke_scope.add_argument("--reason", default=None)
+
+    # ---- audit ----
+    audit = sub.add_parser("audit", help="entity timeline view of WORKFLOW_OBS + capability provenance")
+    audit.add_argument("--entity", required=True,
+                       help="entity to filter on (e.g. SKU-441, V1001, atlas@coat.io/v1)")
+    audit.add_argument("--since", default="24h",
+                       help="duration window: 1h / 24h / 7d / 30d (default 24h)")
+
     args = parser.parse_args()
 
     if args.cmd == "agent":
@@ -84,8 +111,18 @@ def main() -> None:
             agent_list.show_agent(args.agent_id)
         elif args.agent_cmd == "revoke":
             agent_list.revoke_agent(args.agent_id, reason=args.reason)
+        elif args.agent_cmd == "grant":
+            agent_grant.grant(
+                args.agent_id, args.scope,
+                granted_by=args.granted_by, reason=args.reason,
+                auto_yes=args.auto_yes,
+            )
+        elif args.agent_cmd == "revoke-scope":
+            agent_grant.revoke_scope(args.agent_id, args.scope, reason=args.reason)
         else:
             parser.error(f"unknown agent subcommand {args.agent_cmd!r}")
+    elif args.cmd == "audit":
+        coat_audit.audit_entity(args.entity, since=args.since)
     else:
         parser.error(f"unknown command {args.cmd!r}")
 
