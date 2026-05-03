@@ -9,6 +9,10 @@ the agent cares about, it tells the MCP server which tables/columns/joins to use
 
 Falls back to a hand-curated mapping when ANTHROPIC_API_KEY is not set, so the
 MVP stays demoable offline.
+
+Each concept binding is also scored with a structural confidence value (see
+`confidence.py`) — that score is computed from the dossier itself, not from
+the LLM, so the catalog the customer sees is grounded in their actual data.
 """
 from __future__ import annotations
 
@@ -18,6 +22,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from .confidence import score_all_concepts
 
 ROOT = Path(__file__).resolve().parent.parent
 DOSSIER_PATH = ROOT / "context" / "dossier.json"
@@ -206,11 +212,33 @@ def map_semantically(use_llm: bool | None = None) -> dict[str, Any]:
     return FALLBACK_CONTEXT
 
 
+def _bake_confidence(ctx: dict[str, Any]) -> dict[str, Any]:
+    """Compute structural confidence per concept and bake it into the
+    context map. Reads the dossier from disk so the score is always
+    grounded in the *current* data, not whatever the LLM thought."""
+    if not DOSSIER_PATH.exists():
+        return ctx
+    dossier = json.loads(DOSSIER_PATH.read_text())
+    scores = score_all_concepts(ctx.get("concept_map", {}), dossier)
+    for name, binding in ctx.get("concept_map", {}).items():
+        s = scores.get(name)
+        if not s:
+            continue
+        binding["confidence"] = s["confidence"]
+        binding["evidence"] = s["evidence"]
+    return ctx
+
+
 def main() -> None:
     ctx = map_semantically()
+    ctx = _bake_confidence(ctx)
     CONTEXT_PATH.write_text(yaml.safe_dump(ctx, sort_keys=False, default_flow_style=False))
     n = len(ctx.get("concept_map", {}))
-    print(f"Wrote {n} concepts -> {CONTEXT_PATH}")
+    avg = (
+        sum(c.get("confidence", 0) for c in ctx.get("concept_map", {}).values()) / max(n, 1)
+        if n else 0.0
+    )
+    print(f"Wrote {n} concepts -> {CONTEXT_PATH}  (avg confidence {avg:.2f})")
 
 
 if __name__ == "__main__":

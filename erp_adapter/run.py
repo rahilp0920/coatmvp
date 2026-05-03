@@ -35,17 +35,20 @@ def run(cmd: list[str]) -> None:
 
 
 def pipeline_full() -> None:
-    step("1/4  Build messy mock ERP (SQLite)")
+    step("1/5  Build messy mock ERP (SQLite)")
     run([sys.executable, "mock_erp/seed.py"])
 
-    step("2/4  Introspect + semantically map the schema")
+    step("2/5  Introspect + semantically map the schema")
     run([sys.executable, "discovery/introspect.py"])
     run([sys.executable, "-m", "discovery.semantic_map"])
 
-    step("3/4  Mine workflow observations into LEARNED_PATTERNS")
+    step("3/5  Render the discovered concept catalog (with structural confidence)")
+    run([sys.executable, "-m", "cli.render_concepts"])
+
+    step("4/5  Mine workflow observations into LEARNED_PATTERNS")
     run([sys.executable, "-m", "learner.miner"])
 
-    step("4/4  Run agent demo")
+    step("5/5  Run agent demo")
     mode = "live" if (len(sys.argv) > 1 and sys.argv[1] == "live") else "scripted"
     run([sys.executable, "agent/demo.py", mode])
 
