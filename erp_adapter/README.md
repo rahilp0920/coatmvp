@@ -168,11 +168,15 @@ Add to a Claude Desktop or Claude Code MCP config:
     "erp-adapter": {
       "command": "python",
       "args": ["-m", "mcp_server.server"],
-      "cwd": "C:/Users/s_cha/OneDrive/Documents/MVP/erp_adapter"
+      "cwd": "/Users/YOU/coatmvp/erp_adapter"
     }
   }
 }
 ```
+
+> Set `cwd` to the absolute path of `erp_adapter/` on your machine. On macOS
+> this is typically `/Users/YOU/coatmvp/erp_adapter`; on Windows use forward
+> slashes, e.g. `C:/Users/YOU/coatmvp/erp_adapter`.
 
 ---
 

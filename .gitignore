@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+
+# Build artefacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coat — regenerated each run by `python run.py`
+erp_adapter/data/erp.db
+erp_adapter/context/dossier.json
+erp_adapter/context/context.yaml
+
+# Claude Code per-machine local settings (stays on each dev's box)
+.claude/settings.local.json
+
+# Sandbox / scratch
+.write_test
+*.log
