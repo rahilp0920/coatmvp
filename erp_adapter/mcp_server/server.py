@@ -20,6 +20,7 @@ from mcp.server.stdio import stdio_server  # noqa: E402
 from mcp.types import TextContent, Tool  # noqa: E402
 
 from mcp_server import adapter  # noqa: E402
+from mcp_server.bundles import inventory as inventory_bundle  # noqa: E402
 
 server: Server = Server("erp-adapter")
 
@@ -133,6 +134,38 @@ TOOL_SCHEMAS: list[Tool] = [
             "required": ["obs_id", "feedback"],
         },
     ),
+    Tool(
+        name="get_inventory_context",
+        description=(
+            "Return a fully-assembled InventoryContext bundle. This is the "
+            "RECOMMENDED entry point for inventory-domain agents. Coat composes "
+            "ERP stock + bin breakdown + reservations + recent movement velocity + "
+            "learned routing patterns + external signals (weather, supply-chain news) "
+            "into a single business-shaped object. The agent reasons over the bundle; "
+            "it does not call other tools to assemble context. Every input is cited "
+            "in `context_origin`."
+        ),
+        inputSchema={
+            "type": "object",
+            "properties": {
+                "window_days": {
+                    "type": "integer",
+                    "description": "Forecast window the agent will reason over (default 7).",
+                    "default": 7,
+                },
+                "top_n": {
+                    "type": "integer",
+                    "description": "Number of items to include, ranked by recent velocity (default 10).",
+                    "default": 10,
+                },
+                "lookback_days": {
+                    "type": "integer",
+                    "description": "How far back movement history goes (default 60).",
+                    "default": 60,
+                },
+            },
+        },
+    ),
 ]
 
 
@@ -154,6 +187,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         "request_approval": lambda **kw: adapter.request_approval(actor=actor, **kw),
         "list_pending_invoices": lambda **kw: adapter.list_pending_invoices(actor=actor, **kw),
         "submit_feedback": lambda **kw: adapter.submit_feedback(actor=actor, **kw),
+        "get_inventory_context": lambda **kw: inventory_bundle.get_inventory_context(**kw),
     }
     if name not in fn_map:
         return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool {name}"}))]

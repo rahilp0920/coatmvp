@@ -185,3 +185,24 @@ CREATE TABLE LEARNED_PATTERNS (
     CONFIDENCE  REAL,
     LEARNED_AT  TEXT
 );
+
+-- =========================================================================
+-- EXTERNAL SIGNALS (Coat-registered sources outside the ERP)
+-- =========================================================================
+-- Coat is the context layer. External sources (weather, supply-chain news,
+-- sanctions lists, market data) are registered at the tenant level and
+-- pre-fetched into this table, keyed by business entity. The context-bundle
+-- assembler joins from here at call time. Agents never see this table —
+-- they receive composed bundles.
+CREATE TABLE EXTERNAL_SIGNALS (
+    SIGNAL_ID    INTEGER PRIMARY KEY AUTOINCREMENT,
+    SOURCE       TEXT NOT NULL,        -- 'weather', 'shipping_news', 'sanctions', ...
+    ENTITY_KIND  TEXT NOT NULL,        -- 'item', 'vendor', 'region', 'global'
+    ENTITY_KEY   TEXT NOT NULL,        -- e.g. 'SKU-441', 'V1001', 'WH02-region'
+    AS_OF        TEXT NOT NULL,        -- when this signal was observed/computed
+    EXPIRES_AT   TEXT,                 -- when this signal goes stale
+    PAYLOAD_JSON TEXT NOT NULL,        -- the actual signal values
+    PROVENANCE   TEXT                  -- source identifier / parser version / fetched hash
+);
+CREATE INDEX idx_extsig_lookup ON EXTERNAL_SIGNALS(ENTITY_KIND, ENTITY_KEY, SOURCE);
+CREATE INDEX idx_extsig_freshness ON EXTERNAL_SIGNALS(EXPIRES_AT);

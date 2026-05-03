@@ -1,16 +1,23 @@
 """Seed the mock ERP with realistic messy data + a backlog of historical
-workflow observations so the live learner has something to mine on day one."""
+workflow observations so the live learner has something to mine on day one.
+
+Also calls every registered external-source module so EXTERNAL_SIGNALS is
+populated for the inventory context bundle to join from."""
 from __future__ import annotations
 
 import json
 import random
 import sqlite3
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "data" / "erp.db"
 SCHEMA_PATH = ROOT / "mock_erp" / "schema.sql"
+
+# Make external_sources importable when run as `python mock_erp/seed.py`
+sys.path.insert(0, str(ROOT))
 
 random.seed(42)
 
@@ -230,16 +237,25 @@ def main() -> None:
     seed_history(c)
     conn.commit()
 
+    # Seed Coat-registered external sources (weather, shipping news, ...).
+    # These represent tenant-level outside-the-ERP data that the bundle
+    # assembler joins into context payloads at call time.
+    from external_sources import seed_all
+    ext_counts = seed_all(conn)
+    conn.commit()
+
     # Sanity counts
     counts = {}
     for tbl in ("MAT_MASTER","LFA1","T001W","WH_STOCK","BIN_DETAIL","Z_RESERVED",
                 "AP_HEAD","AP_LINES","GL_ENTRIES","MSEG","Z_APPR_RULES",
-                "USERS","WORKFLOW_OBS","LEARNED_PATTERNS"):
+                "USERS","WORKFLOW_OBS","LEARNED_PATTERNS","EXTERNAL_SIGNALS"):
         counts[tbl] = c.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
     conn.close()
     print(f"Seeded {DB_PATH}")
     for tbl, n in counts.items():
         print(f"  {tbl:20s} {n}")
+    if ext_counts:
+        print("  external_sources    " + ", ".join(f"{k}={v}" for k, v in ext_counts.items()))
 
 
 if __name__ == "__main__":
