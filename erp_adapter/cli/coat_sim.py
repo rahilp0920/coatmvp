@@ -1,17 +1,22 @@
 """`coat sim` — inject simulated activity for live demos.
 
-Used during recordings to show that Coat is a *living* layer: a piece
-of news lands, an employee logs an action, a manager corrects a
-routing call — and the next agent run reflects it without any
-re-deployment.
+Used during recordings to show that Coat is a *living* layer: an
+employee posts something in the ERP, a manager corrects a routing
+call, a third-party agent feeds in external signal — and the next
+agent run reflects it without any re-deployment.
 
 Subcommands:
 
-  coat sim news     inject an EXTERNAL_SIGNALS row (news / weather / sanctions)
-  coat sim feedback attach human feedback to a prior observation; learner re-mines
+  coat sim activity  simulate an employee working in the ERP (the change-
+                     boundary beat — the primary 'living layer' demo)
+  coat sim feedback  attach a human correction to a prior observation;
+                     learner re-mines and surfaces a new pattern
+  coat sim news      inject an EXTERNAL_SIGNALS row — represents what
+                     ANOTHER agent (news/weather/sanctions monitor) would
+                     write to Coat over MCP. Useful as a secondary beat.
 
-Both write a row to WORKFLOW_OBS so the watch pane lights up in real
-time. The next `atlas` (or any bundle-consuming agent) call sees the
+All three write to WORKFLOW_OBS so `coat watch` lights up in real
+time. The next `atlas` call (or any bundle-consuming agent) sees the
 new state on its next bundle assembly. No restart, no re-init.
 """
 from __future__ import annotations
@@ -144,6 +149,165 @@ def news(
     _render_news_panel(
         source=source, entity_kind=entity_kind, entity_key=entity_key,
         risk_band=risk_band, risk_score=risk_score, summary=summary,
+    )
+
+
+def activity(
+    *,
+    sku: str,
+    qty: float,
+    warehouse: str = "WH02",
+    repeat: int = 30,
+    over_hours: float = 8.0,
+    actor: str = "u_clerk_a",
+    kind: str = "consume",
+) -> None:
+    """Simulate an employee working in the ERP — the change-boundary beat.
+
+    Posts `repeat` consumption events (BWART=261) for `sku` at
+    `warehouse`, each consuming `qty` units, with timestamps spread
+    over the last `over_hours` hours. Each event:
+
+      • Writes an MSEG row (the SAP material doc)
+      • Decrements BIN_DETAIL.QTY (FIFO across OK bins) and WH_STOCK.LABST
+      • Writes a WORKFLOW_OBS row (so `coat watch` lights up in real time)
+
+    After this runs, Atlas's next call to `get_inventory_context` sees
+    the drained available stock AND the bumped recent-movement velocity
+    — exactly the change-boundary architecture from OBSERVABILITY.md
+    playing out for the demo. No external commands, no agent restart,
+    no re-deploy. Coat just observed and refined.
+    """
+    if kind != "consume":
+        console.print(f"[red]activity --kind only supports 'consume' for now (got {kind!r})[/red]")
+        sys.exit(1)
+    if repeat < 1:
+        console.print("[red]--repeat must be ≥ 1[/red]")
+        sys.exit(1)
+
+    base_now = datetime.now(timezone.utc)
+    interval_minutes = (over_hours * 60.0) / max(repeat, 1)
+    total_qty = qty * repeat
+
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        # Sanity: where does this item sit?
+        wh_row = conn.execute(
+            "SELECT LABST FROM WH_STOCK WHERE MATNR=? AND WERKS=?",
+            (sku, warehouse),
+        ).fetchone()
+        if not wh_row:
+            console.print(
+                f"[red]No WH_STOCK row for {sku} at {warehouse}. Run [bold]coat init[/bold] first.[/red]"
+            )
+            sys.exit(1)
+        starting_avail = float(wh_row[0])
+
+        if total_qty > starting_avail:
+            console.print(
+                f"[yellow]Heads up: planned consumption ({total_qty:.0f}) > available "
+                f"({starting_avail:.0f}). Stock will hit zero before {repeat} events post; "
+                f"the rest will land as zero-quantity (visible in MSEG, no further drain).[/yellow]"
+            )
+
+        mblnr_seq = 90000 + int(base_now.timestamp()) % 1000
+        posted = 0
+        zeroed_at: int | None = None
+
+        for i in range(repeat):
+            mblnr_seq += 1
+            # Stagger timestamps oldest → newest within the window
+            ts = (base_now - timedelta(minutes=interval_minutes * (repeat - 1 - i))).isoformat(timespec="seconds")
+
+            # Refresh available, decide actual qty for this event
+            cur = conn.execute(
+                "SELECT LABST FROM WH_STOCK WHERE MATNR=? AND WERKS=?", (sku, warehouse)
+            ).fetchone()
+            available_now = float(cur[0]) if cur else 0.0
+            this_qty = min(qty, available_now)
+            if this_qty <= 0 and zeroed_at is None:
+                zeroed_at = i
+
+            # Decrement bins FIFO from any OK bin with stock
+            if this_qty > 0:
+                bin_row = conn.execute(
+                    """
+                    SELECT LGORT, BIN_CODE, QTY FROM BIN_DETAIL
+                    WHERE MATNR=? AND WERKS=? AND Z_STATUS='OK' AND QTY > 0
+                    ORDER BY QTY DESC LIMIT 1
+                    """,
+                    (sku, warehouse),
+                ).fetchone()
+                if bin_row:
+                    take = min(this_qty, float(bin_row[2]))
+                    conn.execute(
+                        """
+                        UPDATE BIN_DETAIL SET QTY = QTY - ?
+                        WHERE MATNR=? AND WERKS=? AND LGORT=? AND BIN_CODE=?
+                        """,
+                        (take, sku, warehouse, bin_row[0], bin_row[1]),
+                    )
+                conn.execute(
+                    "UPDATE WH_STOCK SET LABST = LABST - ? WHERE MATNR=? AND WERKS=?",
+                    (this_qty, sku, warehouse),
+                )
+
+            # MSEG row — BWART=261 is consumption / issue-to-cost-center
+            conn.execute(
+                """
+                INSERT INTO MSEG
+                    (MBLNR, ZEILE, BWART, MATNR, WERKS_FROM, WERKS_TO,
+                     LGORT_FROM, LGORT_TO, MENGE, POSTED_BY, POSTED_AT)
+                VALUES (?, 1, '261', ?, ?, NULL, 'MAIN', NULL, ?, ?, ?)
+                """,
+                (f"DOC{mblnr_seq}", sku, warehouse, this_qty, actor, ts),
+            )
+
+            # WORKFLOW_OBS — the change-boundary event Coat observes
+            _log_obs(
+                conn,
+                actor=actor,
+                tool="consume_stock",
+                args={"sku": sku, "qty": this_qty, "warehouse": warehouse,
+                      "movement_type": "261"},
+                result={"doc": f"DOC{mblnr_seq}",
+                        "remaining_available": max(0.0, available_now - this_qty)},
+                outcome="OK",
+            )
+            posted += 1
+        conn.commit()
+
+        ending = conn.execute(
+            "SELECT LABST FROM WH_STOCK WHERE MATNR=? AND WERKS=?", (sku, warehouse)
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+    drained = starting_avail - float(ending)
+    console.print(
+        Panel.fit(
+            Text.assemble(
+                Text("✓ employee activity simulated\n", style="bold green"),
+                Text(f"  who   : ", style="dim"), Text(actor, style="bold"),
+                Text(f"\n  what  : ", style="dim"),
+                Text(f"{posted} consume events on {sku} at {warehouse}", style="default"),
+                Text(f"\n  span  : ", style="dim"),
+                Text(f"last {over_hours:.0f} hours (BWART=261)", style="default"),
+                Text(f"\n  stock : ", style="dim"),
+                Text(f"{starting_avail:.0f} → {float(ending):.0f}  (−{drained:.0f})",
+                     style="bold cyan"),
+                (Text(f"\n  note  : stock zeroed at event #{zeroed_at}", style="yellow")
+                 if zeroed_at is not None else Text("")),
+                Text(
+                    "\n\n  Coat saw every event on the change boundary "
+                    "(check the watch pane).\n  Re-run [bold]atlas[/bold] — the bundle now "
+                    "reflects drained stock + bumped velocity.",
+                    style="dim",
+                ),
+            ),
+            title="Coat — change-boundary observation",
+            border_style="green",
+        )
     )
 
 

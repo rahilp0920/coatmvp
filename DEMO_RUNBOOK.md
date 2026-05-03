@@ -453,17 +453,26 @@ This is the beat that proves Coat is ambient and reactive, not a
 snapshot. **Insert it between Atlas's first run and the inline-ratify
 denial moment.**
 
+The story: an employee is working in the ERP — fulfilling orders,
+draining stock — and Coat observes every event on the change
+boundary. The next agent run reflects the shifted state. No agent
+restart, no re-deploy, no agent code touched.
+
 **Work pane:**
 
 ```bash
-coat sim news --sku SKU-441 \
-  --summary "Texas chip plant fire — additional 25% supply hit, 4-week recovery" \
-  --risk high --score 0.85 --horizon 30
+coat sim activity --sku SKU-300 --qty 25 --warehouse WH02 --repeat 30 --over-hours 8
 ```
 
-**Watch pane (already running) lights up** with an
-`external_signal_ingest` row — the news event is now in Coat's
-context, time-stamped and provenanced.
+This simulates `u_clerk_a` posting 30 consumption events (BWART=261)
+on SKU-300 at WH02 over the last 8 hours. Each event writes an MSEG
+row, decrements `BIN_DETAIL.QTY` and `WH_STOCK.LABST`, and writes to
+`WORKFLOW_OBS`.
+
+**Watch pane (already running) lights up** with 30 `consume_stock`
+events landing in rapid succession. That's Coat seeing the work
+happen at the change boundary — exactly the architecture from
+`OBSERVABILITY.md`: subscribe at the change boundary, never poll.
 
 **Then re-run Atlas:**
 
@@ -473,36 +482,44 @@ atlas --scripted
 
 (or `atlas` with your provider key — the live-mode path is identical.)
 
-**On screen:** the same forecast table, but SKU-441's row shifts —
-projected demand jumps, reorder qty grows, confidence drops (the
-high-risk-band penalty). The reasoning notes now cite both the
-existing Suzhou advisory AND the new Texas chip plant fire. The
-`context_origin` panel cites the same sources — Coat composed the
-new signal into the bundle without any code change.
+**On screen:** SKU-300's row shifts on three columns at once.
 
-| | before news | after news |
+| | before activity | after activity |
 |---|---|---|
-| projected demand | ~206 ± 21 | ~251 ± 25 |
-| reorder qty | 168 | 227 |
-| confidence | 0.85 | 0.75 |
+| primary warehouse | WH02 | **WH01** (Atlas pivoted) |
+| available | 844 | 707 |
+| projected demand | ~108 ± 11 | **~199 ± 20** |
 
-**Voice:** *"Watch what happens when the world changes. A piece of
-shipping news lands. Coat takes it in. Atlas didn't restart. Atlas
+Three visible changes from one operator action:
+- **Atlas pivoted warehouses.** WH02 was drained — Atlas now recommends sourcing from WH01.
+- **Available shifted.** 844 → 707, because the WH02 hero is now at 94.
+- **Projected demand nearly doubled.** Coat saw 30 fresh MSEG events through the bundle assembly. Velocity rose. Atlas's projection reflects it.
+
+**Voice:** *"An employee just spent the last eight hours fulfilling
+orders in our ERP. Coat saw every event on the change boundary —
+that's the watch pane lighting up. Atlas didn't restart. Atlas
 wasn't re-deployed. The next call to the bundle reflects the new
-state. The agent reasoned over a different reality. Same contract,
-same scopes — fresh context. That's the difference between an LLM
-bolted on the side and a layer that lives in your workflow."*
+state — drained stock, rising velocity, a pivoted recommendation.
+The agent reasoned over a different reality. Same contract, same
+scopes, fresh context. That's the difference between an LLM bolted
+on the side and a layer that lives in your workflow."*
 
-**Infrastructure status:** ✓ shipped — `cli/coat_sim.py` (`news` and
-`feedback` subcommands), bundle assembler MAX-aggregates risk across
-signals, Atlas's reasoning amplifies projected demand by `risk_band`
-(high=1.40x, medium=1.15x).
+**Infrastructure status:** ✓ shipped — `cli/coat_sim.py:activity()`
+posts MSEG/BIN_DETAIL/WH_STOCK writes through the change boundary;
+the inventory bundle assembler picks up both the drained available
+and the bumped velocity on its next read.
 
-**For the recording, the `coat sim feedback` variant** is also worth
-a tiny B-roll if you have time — it shows the *human* side of real-
-time updates: an operator submits a correction, the learner re-mines,
-and the next routing call honors the new pattern. Same architectural
-beat, different surface.
+**Three sim primitives are available — pick the right one for your beat:**
+
+- `coat sim activity` — employee works in the ERP. **The primary
+  demo beat.** Shows Coat's change-boundary observability.
+- `coat sim feedback` — manager corrects a prior agent decision.
+  Triggers the learner to re-mine and surfaces a new PREFERENCE
+  pattern. Use as a B-roll if you have time.
+- `coat sim news` — represents what *another agent* (a news
+  monitor, a sanctions checker, a weather feed) would write to
+  Coat over MCP. Useful when telling the third-party agent
+  ecosystem story; less central to the change-boundary beat.
 
 ---
 
@@ -569,7 +586,7 @@ rails do."*
 | 12 | `coat audit --entity` entity timeline + capability provenance | 6 | ✓ shipped | `cli/coat_audit.py` |
 | 13 | `coat` console-script entry point (after `pip install -e .`) | all | ✓ shipped | `pyproject.toml` |
 | 14 | Demo seed overrides for visible risk-band spread (SKU-441 / SKU-200 → HIGH) | 5 | ✓ shipped | `mock_erp/seed.py` |
-| 15 | `coat sim news` + `coat sim feedback` — real-time context injection for the "living layer" beat | 5b | ✓ shipped | `cli/coat_sim.py`, bundle MAX-risk aggregation, Atlas risk-band amplification |
+| 15 | `coat sim activity` (employee at change boundary) + `feedback` + `news` — real-time context refinement for the "living layer" beat | 5b | ✓ shipped | `cli/coat_sim.py`, bundle MAX-risk aggregation, Atlas risk-band amplification |
 
 Six things deliberately *cut* from the build:
 
@@ -636,12 +653,11 @@ atlas "what's our stockout risk for next week, and what should we reorder?"
 # → forecast table with SKU-441 HIGH and SKU-200 HIGH
 
 # Scene 5b — Real-time context update (30s)
-coat sim news --sku SKU-441 \
-  --summary "Texas chip plant fire — additional 25% supply hit, 4-week recovery" \
-  --risk high --score 0.85 --horizon 30
+coat sim activity --sku SKU-300 --qty 25 --warehouse WH02 --repeat 30 --over-hours 8
 atlas
 # → same agent, same scopes — but the forecast shifted because Coat
-#   ingested the news. SKU-441 reorder grows; confidence drops.
+#   observed an employee working in the ERP. WH02 drained, Atlas
+#   pivots to WH01, projected demand nearly doubles.
 
 # Scene 5c — Mid-flight ratification (40s)
 atlas --demo-denial

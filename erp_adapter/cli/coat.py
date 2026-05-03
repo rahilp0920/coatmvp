@@ -113,9 +113,26 @@ def main() -> None:
     sim = sub.add_parser("sim", help="inject simulated activity (live-demo helper)")
     sim_sub = sim.add_subparsers(dest="sim_cmd", required=True)
 
+    activity = sim_sub.add_parser(
+        "activity",
+        help="simulate an employee working in the ERP (the change-boundary beat)",
+    )
+    activity.add_argument("--sku", required=True, help="target item (e.g. SKU-300)")
+    activity.add_argument("--qty", type=float, default=25.0,
+                          help="units consumed per event (default 25)")
+    activity.add_argument("--warehouse", default="WH02",
+                          help="warehouse the activity hits (default WH02)")
+    activity.add_argument("--repeat", type=int, default=30,
+                          help="number of events to post (default 30)")
+    activity.add_argument("--over-hours", dest="over_hours", type=float, default=8.0,
+                          help="time span the events are spread across (default 8 hours)")
+    activity.add_argument("--actor", default="u_clerk_a",
+                          help="employee user_id posting the events (default u_clerk_a)")
+
     news = sim_sub.add_parser(
         "news",
-        help="inject an external news / weather / sanctions signal",
+        help=("inject an external news / weather / sanctions signal "
+              "(simulates what another agent would write to Coat)"),
     )
     news.add_argument("--sku", help="target item (e.g. SKU-441)")
     news.add_argument("--warehouse", help="target warehouse (e.g. WH03)")
@@ -174,7 +191,12 @@ def main() -> None:
     elif args.cmd == "audit":
         coat_audit.audit_entity(args.entity, since=args.since)
     elif args.cmd == "sim":
-        if args.sim_cmd == "news":
+        if args.sim_cmd == "activity":
+            coat_sim.activity(
+                sku=args.sku, qty=args.qty, warehouse=args.warehouse,
+                repeat=args.repeat, over_hours=args.over_hours, actor=args.actor,
+            )
+        elif args.sim_cmd == "news":
             coat_sim.news(
                 sku=args.sku, warehouse=args.warehouse,
                 summary=args.summary, risk_band=args.risk,
