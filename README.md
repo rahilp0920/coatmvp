@@ -44,6 +44,7 @@ coatmvp/
 ├─ SECURITY.md            permissions model, data isolation, audit
 ├─ OBSERVABILITY.md       how Coat sees / what it remembers / what it learns
 ├─ AGENT_PROTOCOL.md      how agents identify, scope capabilities, and audit through Coat's MCP surface
+├─ DEPLOYMENT.md          deployment shapes, configuration layering, visibility surfaces (admin / auditor)
 └─ erp_adapter/           the working pipeline
    ├─ mock_erp/           messy SAP-style schema + seeded data
    ├─ discovery/          schema introspection + semantic mapping
@@ -135,7 +136,11 @@ permissions are learned (not hand-coded), read
 [`OBSERVABILITY.md`](OBSERVABILITY.md). For how any agent (Claude Code,
 GSD, custom plugins, partner systems) identifies itself, requests
 capabilities, and is enforced/audited at every call, read
-[`AGENT_PROTOCOL.md`](AGENT_PROTOCOL.md).
+[`AGENT_PROTOCOL.md`](AGENT_PROTOCOL.md). For how Coat actually lands
+inside a customer (sidecar / cloud SaaS / hybrid bridge), the
+configuration tree, the first-week onboarding flow, and the visibility
+surfaces an admin or auditor uses to see learned patterns with their
+confidence, read [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 ---
 
