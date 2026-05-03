@@ -37,10 +37,15 @@ def main() -> None:
     )
     watch = sub.add_parser(
         "watch",
-        help="live tail of WORKFLOW_OBS + capability grants (run in a side pane during demo)",
+        help=("Coat's main supervisor — tails WORKFLOW_OBS and auto-refines "
+              "the concept catalog when fresh activity warrants it"),
     )
     watch.add_argument("--poll", type=float, default=0.6,
                        help="poll interval in seconds (default 0.6)")
+    watch.add_argument("--refine-on-obs", type=int, default=20,
+                       help="auto-refine after N fresh observations (default 20)")
+    watch.add_argument("--refine-every", type=float, default=24.0,
+                       help="auto-refine at least every N hours (default 24)")
 
     # ---- agent ----
     agent = sub.add_parser("agent", help="agent registration + lifecycle")
@@ -169,7 +174,11 @@ def main() -> None:
         coat_init.init()
         return
     if args.cmd == "watch":
-        coat_watch.watch(poll_seconds=args.poll)
+        coat_watch.watch(
+            poll_seconds=args.poll,
+            refine_on_obs=args.refine_on_obs,
+            refine_every_hours=args.refine_every,
+        )
         return
     if args.cmd == "agent":
         if args.agent_cmd == "onboard":

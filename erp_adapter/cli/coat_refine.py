@@ -132,12 +132,25 @@ def _delete_prior_observation_evidence(evidence: list[str]) -> list[str]:
     ]
 
 
-def refine(*, window: str = "2h") -> None:
+def refine(*, window: str = "2h", silent: bool = False) -> dict[str, Any]:
+    """Refine concept-catalog confidence from recent observations.
+
+    Returns a result dict:
+      {
+        "bumped":      int,   # number of concepts whose confidence rose
+        "total_obs":   int,   # total observations contributing to bumps
+        "concepts":    [{"name", "old", "new", "delta", "obs"}],
+        "skipped":     [{"name", "obs"}],   # below threshold
+      }
+
+    `silent=True` skips the rich-rendered table — useful when called from
+    inside `coat watch` so the supervisor renders the result inline."""
     if not CONTEXT_PATH.exists():
-        console.print(
-            "[red]No context.yaml. Run [bold]coat init[/bold] first.[/red]"
-        )
-        return
+        if not silent:
+            console.print(
+                "[red]No context.yaml. Run [bold]coat init[/bold] first.[/red]"
+            )
+        return {"bumped": 0, "total_obs": 0, "concepts": [], "skipped": []}
 
     delta = _parse_window(window)
     counts = _count_touches(delta)
@@ -145,8 +158,9 @@ def refine(*, window: str = "2h") -> None:
     ctx = yaml.safe_load(CONTEXT_PATH.read_text())
     cmap = ctx.get("concept_map", {}) or {}
     if not cmap:
-        console.print("[red]context.yaml has no concept_map.[/red]")
-        return
+        if not silent:
+            console.print("[red]context.yaml has no concept_map.[/red]")
+        return {"bumped": 0, "total_obs": 0, "concepts": [], "skipped": []}
 
     table = Table(
         title=Text(
@@ -165,6 +179,9 @@ def refine(*, window: str = "2h") -> None:
 
     bumped = 0
     total_obs = 0
+    bumped_rows: list[dict[str, Any]] = []
+    skipped_rows: list[dict[str, Any]] = []
+
     for name, binding in cmap.items():
         n = counts.get(name, 0)
         old = float(binding.get("confidence", 0.0))
@@ -173,6 +190,8 @@ def refine(*, window: str = "2h") -> None:
         if delta_val > 0:
             bumped += 1
             total_obs += n
+            bumped_rows.append({"name": name, "old": old, "new": new,
+                                "delta": delta_val, "obs": n})
             evidence = list(binding.get("evidence") or [])
             evidence = _delete_prior_observation_evidence(evidence)
             evidence.append(
@@ -180,30 +199,42 @@ def refine(*, window: str = "2h") -> None:
             )
             binding["evidence"] = evidence
             binding["confidence"] = new
+        elif n > 0:
+            skipped_rows.append({"name": name, "obs": n})
 
-        # Render — even if no bump, show the obs count
-        bar_old = "█" * round(old * 5) + "░" * (5 - round(old * 5))
-        bar_new = "█" * round(new * 5) + "░" * (5 - round(new * 5))
-        if delta_val > 0:
-            conf_cell = Text.assemble(
-                Text(bar_old, style="dim"),
-                Text(f" {old:.2f}  →  ", style="dim"),
-                Text(bar_new, style="bright_green"),
-                Text(f" {new:.2f}", style="bold"),
-            )
-            delta_cell = Text(f"+{delta_val:.2f}", style="bold bright_green")
-        else:
-            conf_cell = Text.assemble(
-                Text(bar_old, style="dim"),
-                Text(f" {old:.2f}", style="dim"),
-            )
-            delta_cell = Text("—" if n == 0 else f" {n} obs (< {MIN_OBS_FOR_BUMP})",
-                              style="dim")
+        if not silent:
+            bar_old = "█" * round(old * 5) + "░" * (5 - round(old * 5))
+            bar_new = "█" * round(new * 5) + "░" * (5 - round(new * 5))
+            if delta_val > 0:
+                conf_cell = Text.assemble(
+                    Text(bar_old, style="dim"),
+                    Text(f" {old:.2f}  →  ", style="dim"),
+                    Text(bar_new, style="bright_green"),
+                    Text(f" {new:.2f}", style="bold"),
+                )
+                delta_cell = Text(f"+{delta_val:.2f}", style="bold bright_green")
+            else:
+                conf_cell = Text.assemble(
+                    Text(bar_old, style="dim"),
+                    Text(f" {old:.2f}", style="dim"),
+                )
+                delta_cell = Text("—" if n == 0 else f" {n} obs (< {MIN_OBS_FOR_BUMP})",
+                                  style="dim")
+            table.add_row(name, str(n) if n else "—", conf_cell, delta_cell)
 
-        table.add_row(name, str(n) if n else "—", conf_cell, delta_cell)
-
-    # Persist updated context
+    # Persist updated context regardless of silent mode
     CONTEXT_PATH.write_text(yaml.safe_dump(ctx, sort_keys=False, default_flow_style=False))
+
+    result = {
+        "bumped": bumped,
+        "total_obs": total_obs,
+        "concepts": bumped_rows,
+        "skipped": skipped_rows,
+    }
+
+    if silent:
+        return result
+
     console.print(table)
 
     if bumped == 0:
@@ -212,7 +243,7 @@ def refine(*, window: str = "2h") -> None:
             f"threshold yet. Run [bold]coat sim activity[/bold] to simulate "
             f"operator work, then re-run refine.[/dim]"
         )
-        return
+        return result
 
     console.print(
         Panel.fit(
@@ -232,3 +263,4 @@ def refine(*, window: str = "2h") -> None:
             border_style="green",
         )
     )
+    return result
