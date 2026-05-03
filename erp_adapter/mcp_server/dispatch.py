@@ -7,20 +7,36 @@ set return a structured `cap.denied` payload — they do not raise, they
 do not silently succeed, and they always write a row to WORKFLOW_OBS so
 the audit chain captures the attempt.
 
+When an interactive admin is sitting at the terminal where the agent is
+running, the dispatcher will surface the denial *inline* — printing a
+scope-expansion request panel and prompting the admin to approve or
+reject. On approve, the missing capability is granted (with full audit),
+the call retries automatically, and the agent gets the result it asked
+for. The admin never types a scope string.
+
 This is the runtime side of the Coat Agent Protocol. The onboarding side
 (`coat agent onboard`) defines the contract; this side enforces it on
-every call.
+every call and offers mid-flight ratification when the contract needs to
+expand.
 """
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
+import sys
 import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
+
+_console = Console()
 
 ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT / "data" / "erp.db"
@@ -174,22 +190,150 @@ def _bump_trial_call_count(conn: sqlite3.Connection, agent_id: str) -> None:
 # Dispatch wrapper
 # ---------------------------------------------------------------------------
 
+def _interactive_ratify_enabled() -> bool:
+    """The mid-flight ratification UI is on by default in TTY contexts.
+
+    Disable explicitly with COAT_NO_INLINE_RATIFY=1 (e.g., for non-
+    interactive scripts or test runs that want to see the raw cap.denied
+    envelope). Force on with COAT_FORCE_INLINE_RATIFY=1 (useful when
+    stdin is piped but you still want the prompt to fire)."""
+    if os.environ.get("COAT_NO_INLINE_RATIFY") == "1":
+        return False
+    if os.environ.get("COAT_FORCE_INLINE_RATIFY") == "1":
+        return True
+    return sys.stdin.isatty()
+
+
+def _surface_request_and_prompt(
+    agent_id: str,
+    tool_name: str,
+    args: dict[str, Any],
+    missing_scope: str,
+    reason: str,
+    audit_id: str,
+) -> bool:
+    """Print the scope-expansion request panel and prompt admin for y/n.
+
+    Returns True if the admin approved.
+    """
+    summary_arg = ""
+    for k in ("matnr", "vendor", "belnr", "warehouse"):
+        if k in args:
+            summary_arg = f"{k}={args[k]}"
+            break
+
+    _console.print(
+        Panel.fit(
+            Text.assemble(
+                Text("scope-expansion request\n", style="bold yellow"),
+                Text(f"  agent  : ", style="dim"), Text(agent_id, style="bold"),
+                Text(f"\n  asks   : ", style="dim"), Text(missing_scope, style="bold cyan"),
+                Text(f"\n  to do  : ", style="dim"),
+                Text(f"{tool_name}({summary_arg})", style="default"),
+                Text(f"\n  reason : ", style="dim"), Text(reason, style="default"),
+                Text(f"\n  audit  : {audit_id}", style="dim"),
+            ),
+            title="Coat",
+            border_style="yellow",
+        )
+    )
+    _console.print("[bold]Approve this scope for this agent? [y/n][/bold]")
+    try:
+        answer = input("> ").strip().lower()
+    except EOFError:
+        return False
+    return answer in ("y", "yes")
+
+
+def _grant_inline(
+    agent_id: str,
+    scope: str,
+    *,
+    granted_by: str = "u_mgr_c",
+    note: str = "inline ratification (mid-flight)",
+) -> None:
+    """Add a CAPABILITY_GRANTS row + update the agent's manifest in place."""
+    with _db() as conn:
+        conn.execute(
+            """
+            INSERT INTO CAPABILITY_GRANTS
+                (AGENT_ID, SCOPE, ORIGIN, GRANTED_AT, GRANTED_BY, NOTE)
+            VALUES (?, ?, 'admin', ?, ?, ?)
+            """,
+            (agent_id, scope, _now_iso(), granted_by, note),
+        )
+        row = conn.execute(
+            "SELECT MANIFEST_JSON FROM AGENTS WHERE AGENT_ID=?", (agent_id,)
+        ).fetchone()
+        if row and row["MANIFEST_JSON"]:
+            manifest = json.loads(row["MANIFEST_JSON"])
+            granted = list(manifest.get("granted_scopes") or [])
+            if scope not in granted:
+                granted.append(scope)
+                manifest["granted_scopes"] = sorted(granted)
+            denied = [d for d in (manifest.get("denied_scopes") or []) if d.get("scope") != scope]
+            manifest["denied_scopes"] = denied
+            conn.execute(
+                "UPDATE AGENTS SET MANIFEST_JSON=? WHERE AGENT_ID=?",
+                (json.dumps(manifest, default=str), agent_id),
+            )
+
+
 def dispatch(
     agent_id: str,
     tool_name: str,
     args: dict[str, Any],
     impl: Callable[..., Any],
+    *,
+    allow_inline_ratify: bool | None = None,
 ) -> dict[str, Any]:
-    """Run `impl(**args)` after a scope check. Returns the impl's result, or a
-    cap.denied envelope when scope is missing. Either way, an obs row lands.
+    """Run `impl(**args)` after a scope check.
 
-    The caller is expected to be either the MCP `call_tool` shim or an
-    in-process agent like Atlas — both pass their agent identity.
+    Returns the impl's result, or a cap.denied envelope when scope is
+    missing AND mid-flight ratification was unavailable / declined.
+
+    If `allow_inline_ratify` is None (default), the function consults the
+    TTY: when an interactive admin is at the terminal, it prints the
+    scope-expansion request panel and prompts y/n. On approve, the
+    capability is granted (audited) and the call retries automatically.
     """
     audit_id = "aud_" + uuid.uuid4().hex
     check = check_scope(agent_id, tool_name)
 
     if not check.get("allowed"):
+        # Mid-flight ratification path — the agent asks, the admin decides.
+        if (allow_inline_ratify if allow_inline_ratify is not None else _interactive_ratify_enabled()) \
+                and check.get("missing_scope") and check.get("agent_status") not in ("revoked", "unregistered"):
+            approved = _surface_request_and_prompt(
+                agent_id=agent_id,
+                tool_name=tool_name,
+                args=args,
+                missing_scope=check["missing_scope"],
+                reason=check.get("reason") or "",
+                audit_id=audit_id,
+            )
+            if approved:
+                _grant_inline(agent_id, check["missing_scope"])
+                _console.print(
+                    Panel.fit(
+                        Text.assemble(
+                            Text("✓ ", style="bold green"),
+                            Text(f"granted ", style="default"),
+                            Text(check["missing_scope"], style="bold"),
+                            Text(f" to {agent_id}", style="default"),
+                            Text(f"\n  retrying {tool_name}…", style="dim"),
+                        ),
+                        border_style="green",
+                    )
+                )
+                # Retry — but disable inline ratify on the recursive call so
+                # we don't loop on a different missing scope.
+                return dispatch(agent_id, tool_name, args, impl, allow_inline_ratify=False)
+            else:
+                _console.print(
+                    "[yellow]✗ admin declined the scope expansion. Returning cap.denied.[/yellow]"
+                )
+
         denial = {
             "error": "cap.denied",
             "tool": tool_name,

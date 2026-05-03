@@ -358,29 +358,42 @@ def demo_denial(agent_id: str = DEFAULT_AGENT_ID) -> None:
     )
 
     if isinstance(result, dict) and result.get("error") == "cap.denied":
+        # Inline-ratify path either declined or unavailable — surface the
+        # admin-side resolution path explicitly.
         console.print(
             Panel.fit(
                 Text.assemble(
-                    Text("cap.denied  ", style="bold red"),
-                    Text("move_stock  ", style="bold"),
-                    Text(f"agent={agent_id}\n", style="dim"),
-                    Text(f"missing: ", style="default"),
-                    Text(result.get("missing_scope") or "?", style="bold cyan"),
-                    Text(f"\nreason : {result.get('reason')}\n", style="default"),
-                    Text(f"audit_id: {result.get('audit_id')}\n", style="dim"),
-                    Text("\nadmin next step:\n", style="default"),
-                    Text(f"  $ python -m cli.coat agent grant {agent_id} "
-                         f"{result.get('missing_scope')} --reason 'atlas demo'",
-                         style="bold yellow"),
+                    Text("Atlas was denied and the admin did not approve.\n", style="bold red"),
+                    Text("\nadmin can still grant out-of-band:\n", style="default"),
+                    Text(
+                        f"  $ coat agent grant {agent_id} "
+                        f"{result.get('missing_scope')} --reason 'atlas demo'",
+                        style="bold yellow",
+                    ),
                 ),
-                title="scope-expansion request",
+                title="cap.denied",
                 border_style="red",
             )
         )
     else:
+        # Either the admin approved inline (mid-flight ratification) or the
+        # capability was already granted on a prior run.
+        scope = (result.get("_audit") or {}).get("scope") if isinstance(result, dict) else None
         console.print(
-            f"[yellow]Atlas was actually allowed to call move_stock — manifest "
-            f"may have been expanded already. Result: {result}[/yellow]"
+            Panel.fit(
+                Text.assemble(
+                    Text("✓ ", style="bold green"),
+                    Text("move_stock posted ", style="default"),
+                    Text(str(result.get("doc", "?")), style="bold"),
+                    Text(f"  qty={result.get('moved')} {result.get('from')}→{result.get('to')}\n",
+                         style="dim"),
+                    Text(f"  scope used: {scope}\n", style="dim") if scope else Text(""),
+                    Text(f"  every step is in the audit chain — `coat audit --entity SKU-441`",
+                         style="dim"),
+                ),
+                title="atlas resolved its own permission ask",
+                border_style="green",
+            )
         )
 
 

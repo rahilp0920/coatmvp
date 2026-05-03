@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coat-mvp"
+version = "0.1.0"
+description = "Coat — AI-native ERP layer (MVP)"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Coat" }]
+dependencies = [
+    "anthropic>=0.39.0",
+    "mcp>=1.0.0",
+    "pyyaml>=6.0",
+    "rich>=13.7.0",
+]
+
+[project.optional-dependencies]
+openai = ["openai>=1.30"]
+google = ["google-genai>=0.3"]
+
+[project.scripts]
+coat = "cli.coat:main"
+atlas = "agents.atlas:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cli*", "agents*", "discovery*", "external_sources*", "learner*", "mcp_server*", "mock_erp*"]

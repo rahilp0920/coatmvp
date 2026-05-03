@@ -20,12 +20,24 @@ from pathlib import Path
 # Make sibling modules importable when run as `python -m cli.coat`
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from cli import agent_onboard, agent_list, agent_grant, coat_audit  # noqa: E402
+from cli import agent_onboard, agent_list, agent_grant, coat_audit, coat_init, coat_watch  # noqa: E402
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="coat", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
+
+    # ---- init / watch ----
+    sub.add_parser(
+        "init",
+        help="initialize Coat in this workspace (build DB, run discovery, render catalog)",
+    )
+    watch = sub.add_parser(
+        "watch",
+        help="live tail of WORKFLOW_OBS + capability grants (run in a side pane during demo)",
+    )
+    watch.add_argument("--poll", type=float, default=0.6,
+                       help="poll interval in seconds (default 0.6)")
 
     # ---- agent ----
     agent = sub.add_parser("agent", help="agent registration + lifecycle")
@@ -96,6 +108,12 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    if args.cmd == "init":
+        coat_init.init()
+        return
+    if args.cmd == "watch":
+        coat_watch.watch(poll_seconds=args.poll)
+        return
     if args.cmd == "agent":
         if args.agent_cmd == "onboard":
             agent_onboard.run(
