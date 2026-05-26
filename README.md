@@ -146,6 +146,4 @@ confidence, read [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 ---
 
-## Status
 
-Private beta. Not for external distribution.
